@@ -50,5 +50,3 @@ evolution-data/
 
 # sdd scratch
 .superpowers/
-
-/src/generated/prisma
