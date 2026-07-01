@@ -55,6 +55,8 @@ These map directly to `AppointmentStatus` enum values. Use these tokens for badg
 
 Access via Tailwind: `bg-[var(--status-confirmed)] text-[var(--status-confirmed-fg)]`.
 
+**Dark theme adjustments**: In `.theme-dark`, `--destructive` and `--status-cancelled` use `#C4645A` (brightened from light-scope `#A34D42`) to ensure sufficient contrast and legibility on charcoal backgrounds.
+
 ---
 
 ## 2. Typography
@@ -136,7 +138,7 @@ Do not use: `shadow-lg`, `shadow-xl`, `shadow-2xl`, or colored glows.
 ### Buttons
 
 ```
-Primary:   bg-primary text-primary-foreground      → brass fill, use sparingly (1 per screen section)
+Primary:   bg-primary text-primary-foreground hover:bg-primary-hover  → brass fill, use sparingly (1 per screen section)
 Secondary: bg-secondary text-secondary-foreground  → muted warm fill
 Outline:   border-border bg-background             → for non-destructive tertiary actions
 Ghost:     hover:bg-muted                          → for icon buttons and table row actions
@@ -146,6 +148,7 @@ Destructive: bg-destructive/10 text-destructive   → always pair with a confirm
 - Size: use `default` (h-8) for most UI, `sm` for table row actions, `lg` for CTA hero buttons.
 - Do not use `rounded-full` for buttons. All buttons use `rounded-lg` (the default).
 - The brass primary button is reserved for the single most important action on a page (e.g., "Nova reserva").
+- Primary button hover state: `hover:bg-primary-hover` (#B0843C).
 
 ### Cards
 

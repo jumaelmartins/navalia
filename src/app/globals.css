@@ -26,6 +26,8 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -91,6 +93,8 @@
 
   /* Semantic */
   --destructive: #a34d42;
+  --destructive-foreground: #ffffff;
+  --primary-hover: #B0843C;
   --border: #e7e0d5;
   --input: #e7e0d5;
   --ring: #c4964a;
@@ -153,6 +157,8 @@
 
   /* Semantic */
   --destructive: #c4645a;    /* slightly brighter for dark bg legibility */
+  --destructive-foreground: #f5f1ea;
+  --primary-hover: #B0843C;
   --border: #332d27;
   --input: #2a2520;
   --ring: #c4964a;
