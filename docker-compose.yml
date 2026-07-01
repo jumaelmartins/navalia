@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: navalia
+      POSTGRES_PASSWORD: navalia
+      POSTGRES_DB: navalia
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  evolution:
+    image: evoapicloud/evolution-api:v2.2.3
+    ports: ["8080:8080"]
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-navalia-dev-key}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://navalia:navalia@postgres:5432/evolution?schema=public
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/1
+    depends_on: [postgres, redis]
+volumes:
+  pgdata:
