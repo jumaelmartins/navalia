@@ -1,0 +1,24 @@
+# deps / build
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# db / docker volumes
+postgres-data/
+redis-data/
+evolution-data/
+
+# misc
+.DS_Store
+npm-debug.log*
+coverage/
+
+# local reference material (not part of the product)
+*.pdf
