@@ -50,3 +50,4 @@ evolution-data/
 
 # sdd scratch
 .superpowers/
+*.log
