@@ -22,3 +22,6 @@ coverage/
 
 # local reference material (not part of the product)
 *.pdf
+
+# sdd scratch
+.superpowers/
