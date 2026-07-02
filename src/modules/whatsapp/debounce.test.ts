@@ -155,3 +155,22 @@ describe('concurrent keys do not interfere with each other', () => {
     expect(flush2).toHaveBeenCalledWith(['B'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Test 4: tokKey is deleted after successful flush
+// ---------------------------------------------------------------------------
+describe('tokKey is deleted from redis after successful flush', () => {
+  it('tok key is null after the flush window closes', async () => {
+    const key = 'wa:shop1:phone1'
+    const flushFn = vi.fn().mockResolvedValue(undefined)
+
+    await scheduleDebounced(key, 'A', 4000, flushFn)
+    await vi.advanceTimersByTimeAsync(4100)
+
+    expect(flushFn).toHaveBeenCalledTimes(1)
+
+    // tokKey should have been deleted after the successful flush
+    const tokValue = await memRedis.get(`${key}:tok`)
+    expect(tokValue).toBeNull()
+  })
+})

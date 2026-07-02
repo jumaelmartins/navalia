@@ -495,3 +495,87 @@ describe('handleInboundMessage: non-text message (text = null)', () => {
     expect(mockRunAssistant).not.toHaveBeenCalled()
   })
 })
+
+describe('handleInboundMessage: non-text + TRANSFERRED_TO_HUMAN → silent', () => {
+  it('does NOT send NON_TEXT_REPLY when conversation is TRANSFERRED_TO_HUMAN', async () => {
+    mockUpsertConv.mockResolvedValue(TRANSFERRED_CONV)
+
+    await handleInboundMessage({ ...BASE_ARGS, text: null })
+
+    expect(mockSendText).not.toHaveBeenCalled()
+    expect(mockCreateMsg).not.toHaveBeenCalled()
+    expect(mockScheduleDebounced).not.toHaveBeenCalled()
+  })
+})
+
+describe('flushToAI: history excludes last N INBOUND-CUSTOMER rows by tail-walk', () => {
+  it('excludes burst row (b) and OUTBOUND-SYSTEM row from history; keeps prior row (a)', async () => {
+    // Override debounce to flush with fragment 'b' specifically
+    mockScheduleDebounced.mockImplementationOnce(
+      async (
+        _key: string,
+        _payload: string,
+        _delay: number,
+        flush: (frags: string[]) => Promise<void>,
+      ) => {
+        await flush(['b'])
+      },
+    )
+
+    // findMany returns rows in DESC order (most-recent first)
+    mockFindManyMsgs.mockResolvedValueOnce([
+      { id: '3', direction: 'INBOUND', senderType: 'CUSTOMER', content: 'b', createdAt: new Date(3) },
+      { id: '2', direction: 'OUTBOUND', senderType: 'SYSTEM', content: 'x', createdAt: new Date(2) },
+      { id: '1', direction: 'INBOUND', senderType: 'CUSTOMER', content: 'a', createdAt: new Date(1) },
+    ])
+
+    await handleInboundMessage(BASE_ARGS)
+
+    // runAssistant should receive only the prior user message 'a' in history;
+    // burst row 'b' (INBOUND-CUSTOMER tail) and OUTBOUND-SYSTEM 'x' are excluded.
+    const callArgs = mockRunAssistant.mock.calls[0][0] as { history: Array<{ role: string; content: string }> }
+    expect(callArgs.history).toEqual([{ role: 'user', content: 'a' }])
+  })
+})
+
+describe('flushToAI: sendText failure → persist OUTBOUND SYSTEM with [FALHA NO ENVIO] prefix', () => {
+  it('persists OUTBOUND SYSTEM with failure prefix when sendText fails; no AI row', async () => {
+    mockSendText.mockResolvedValueOnce({ ok: false, error: 'Network timeout' })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    // Find the OUTBOUND SYSTEM row with the failure prefix
+    const sysMsgCall = mockCreateMsg.mock.calls.find(
+      (call: unknown[]) => {
+        const data = (call[0] as { data: { direction: string; senderType: string } }).data
+        return data.direction === 'OUTBOUND' && data.senderType === 'SYSTEM'
+      },
+    )
+    expect(sysMsgCall).toBeDefined()
+    const content = (sysMsgCall![0] as { data: { content: string } }).data.content
+    expect(content).toMatch(/^\[FALHA NO ENVIO\]/)
+
+    // No OUTBOUND AI row should be persisted
+    const aiMsgCall = mockCreateMsg.mock.calls.find(
+      (call: unknown[]) =>
+        (call[0] as { data: { senderType: string } }).data.senderType === 'AI',
+    )
+    expect(aiMsgCall).toBeUndefined()
+  })
+})
+
+describe('handleInboundMessage: [HUMANO] marker — replaceAll removes all occurrences', () => {
+  it('strips every [HUMANO] when reply contains the marker twice', async () => {
+    mockRunAssistant.mockResolvedValue({
+      ok: true,
+      data: { reply: '[HUMANO] Transferindo. [HUMANO] Tenha um bom dia!' },
+    })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    const [, , sentText] = mockSendText.mock.calls[0] as [string, string, string]
+    expect(sentText).not.toContain('[HUMANO]')
+    expect(sentText).toContain('Transferindo.')
+    expect(sentText).toContain('Tenha um bom dia!')
+  })
+})

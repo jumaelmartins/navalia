@@ -51,6 +51,7 @@ export async function scheduleDebounced(
 
       if (fragments.length > 0) {
         await flush(fragments)
+        await redis.del(tokKey) // release token after successful flush
       }
     } catch (err) {
       console.error('[debounce] flush error', key, err)

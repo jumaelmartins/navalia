@@ -243,34 +243,40 @@ export async function handleInboundMessage({
         })
         .catch(() => null)
 
-      if (!existing || existing.state !== 'CLOSED') {
-        // Send denial reply once and close the conversation
-        const sendResult = await evolution.sendText(instanceName, fromPhone, ACCESS_DENIED_REPLY)
-        if (!sendResult.ok) {
-          console.error('[pipeline] access-denied sendText failed', sendResult.error)
-        }
+      if (existing?.state === 'CLOSED') {
+        // Already denied — stay silent.
+        // TOCTOU: a tiny race remains on single-node (two concurrent reads before
+        // either write completes); accepted without a distributed lock.
+        return
+      }
 
-        const conv = await prisma.whatsappConversation.upsert({
-          where: {
-            barbershopId_customerPhone: {
-              barbershopId: shop.id,
-              customerPhone: fromPhone,
-            },
-          },
-          create: {
+      // Narrow the race: write CLOSED to DB BEFORE sending the denial so that a
+      // concurrent second webhook sees CLOSED on its own findUnique and exits above.
+      const conv = await prisma.whatsappConversation.upsert({
+        where: {
+          barbershopId_customerPhone: {
             barbershopId: shop.id,
             customerPhone: fromPhone,
-            state: 'CLOSED',
-            lastMessageAt: new Date(),
           },
-          update: { state: 'CLOSED', lastMessageAt: new Date() },
-        })
+        },
+        create: {
+          barbershopId: shop.id,
+          customerPhone: fromPhone,
+          state: 'CLOSED',
+          lastMessageAt: new Date(),
+        },
+        update: { state: 'CLOSED', lastMessageAt: new Date() },
+      })
 
-        if (text !== null) {
-          await persistMessage(shop, conv, 'INBOUND', 'CUSTOMER', text)
-        }
-        await persistMessage(shop, conv, 'OUTBOUND', 'SYSTEM', ACCESS_DENIED_REPLY)
+      const sendResult = await evolution.sendText(instanceName, fromPhone, ACCESS_DENIED_REPLY)
+      if (!sendResult.ok) {
+        console.error('[pipeline] access-denied sendText failed', sendResult.error)
       }
+
+      if (text !== null) {
+        await persistMessage(shop, conv, 'INBOUND', 'CUSTOMER', text)
+      }
+      await persistMessage(shop, conv, 'OUTBOUND', 'SYSTEM', ACCESS_DENIED_REPLY)
       return
     }
 
@@ -299,20 +305,25 @@ export async function handleInboundMessage({
       })
     }
 
-    // ── 4. Persist INBOUND message ──────────────────────────────────────────
-    if (text !== null) {
-      await persistMessage(shop, conversation, 'INBOUND', 'CUSTOMER', text)
+    // ── 4. Human-transferred gate (MUST precede non-text handling) ──────────────
+    // If a human agent has taken over, persist text INBOUND for audit then
+    // return without any bot reply. Non-text is ignored silently.
+    if (conversation.state === 'TRANSFERRED_TO_HUMAN') {
+      if (text !== null) {
+        await persistMessage(shop, conversation, 'INBOUND', 'CUSTOMER', text)
+      }
+      return
     }
 
-    // ── 5. Handle non-text messages ─────────────────────────────────────────
+    // ── 5. Handle non-text messages (bot is active at this point) ───────────────
     if (text === null) {
       await evolution.sendText(instanceName, fromPhone, NON_TEXT_REPLY)
       await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', NON_TEXT_REPLY)
       return
     }
 
-    // ── 6. Human-transferred conversations: persist only, skip bot ─────────
-    if (conversation.state === 'TRANSFERRED_TO_HUMAN') return
+    // ── 6. Persist INBOUND message ──────────────────────────────────────────────
+    await persistMessage(shop, conversation, 'INBOUND', 'CUSTOMER', text)
 
     // ── 7. Debounce — collect burst; flush to AI after window closes ────────
     await scheduleDebounced(
@@ -362,11 +373,21 @@ async function flushToAI({
   })
 
   const chronological = rawMsgs.reverse()
-  // Drop the most-recent fragment messages (the current burst)
-  const historySubset = chronological.slice(
-    0,
-    Math.max(0, chronological.length - fragments.length),
-  )
+
+  // Exclude exactly `fragments.length` INBOUND-CUSTOMER rows from the tail.
+  // A positional slice misfires when SYSTEM rows are interleaved between burst
+  // INBOUND rows (e.g. a non-text reply arrived mid-burst), leaving burst
+  // messages duplicated in the AI context.
+  const toExclude = new Set<number>()
+  let remaining = fragments.length
+  for (let i = chronological.length - 1; i >= 0 && remaining > 0; i--) {
+    const m = chronological[i]
+    if (m.direction === 'INBOUND' && m.senderType === 'CUSTOMER') {
+      toExclude.add(i)
+      remaining--
+    }
+  }
+  const historySubset = chronological.filter((_, i) => !toExclude.has(i))
 
   const history: ChatMsg[] = historySubset
     .filter(m => !(m.direction === 'OUTBOUND' && m.senderType === 'SYSTEM'))
@@ -423,20 +444,20 @@ async function flushToAI({
   let reply = result.data.reply
   let isHumanHandoff = false
 
-  // Detect [HUMANO] marker — strip it and append handoff notice
+  // Detect [HUMANO] marker — strip ALL occurrences and append handoff notice
   if (reply.includes(HUMAN_MARKER)) {
-    reply = reply.replace(HUMAN_MARKER, '').trim()
+    reply = reply.replace(/\[HUMANO\]/g, '').trim()
     reply = reply + HUMAN_HANDOFF_SUFFIX
     isHumanHandoff = true
   }
 
-  // Persist OUTBOUND AI message
-  await persistMessage(shop, conversation, 'OUTBOUND', 'AI', reply)
-
-  // Send via Evolution (best-effort; log failures but don't crash)
+  // Send via Evolution FIRST — persist only after knowing the delivery outcome.
   const sendResult = await evolution.sendText(instanceName, fromPhone, reply)
-  if (!sendResult.ok) {
+  if (sendResult.ok) {
+    await persistMessage(shop, conversation, 'OUTBOUND', 'AI', reply)
+  } else {
     console.error('[pipeline] sendText failed', sendResult.error)
+    await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', '[FALHA NO ENVIO] ' + reply)
   }
 
   // Transition state when human handoff is requested
