@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { createCheckoutSession, createPortalSession } from '@/modules/billing/actions'
@@ -82,8 +82,10 @@ export function AssinaturaClient({
   const priceLabel = formatCentsToBRL(priceCents)
 
   const trialDate = new Date(trialEndsAt)
-  // eslint-disable-next-line react-hooks/purity
-  const daysLeft = Math.ceil((trialDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  const daysLeft = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity
+    return Math.ceil((trialDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  }, [trialEndsAt])
 
   const showCheckout = status === 'TRIALING' || status === 'CANCELED' || status === 'PAST_DUE'
   const showPortal = !!stripeCustomerId

@@ -852,7 +852,6 @@ export function AgendaClient({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (view === 'day') refreshDay(currentDate, filterProfId)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     else refreshWeek(weekStart, filterProfId)
   }, [view, currentDate, filterProfId, weekStart, refreshDay, refreshWeek])
 

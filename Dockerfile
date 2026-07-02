@@ -12,8 +12,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NEXT_PUBLIC_* vars are inlined at build time — override via --build-arg
-ARG NEXT_PUBLIC_APP_URL=https://navalia.app
+# NEXT_PUBLIC_* vars are inlined at build time — override via --build-arg / compose build args in prod
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3000
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 # Dummy values so Next.js can import modules that read env at module-init time.

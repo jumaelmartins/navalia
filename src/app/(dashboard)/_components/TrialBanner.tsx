@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { createCheckoutSession } from '@/modules/billing/actions'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
@@ -13,11 +13,10 @@ interface TrialBannerProps {
 export function TrialBanner({ trialEndsAt, priceCents }: TrialBannerProps) {
   const [loading, setLoading] = useState(false)
 
-  /* eslint-disable react-hooks/purity */
-  const daysLeft = Math.ceil(
+  const daysLeft = useMemo(() => Math.ceil(
+    // eslint-disable-next-line react-hooks/purity
     (new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-  )
-  /* eslint-enable react-hooks/purity */
+  ), [trialEndsAt])
 
   // Gate already blocks when trial expires; don't render for 0 or negative
   if (daysLeft <= 0) return null
