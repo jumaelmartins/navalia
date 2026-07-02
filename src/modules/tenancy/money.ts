@@ -46,3 +46,11 @@ export function parseBRLToCents(input: string): number | null {
   // Multiply by 100 and round to avoid floating-point rounding errors
   return Math.round(value * 100)
 }
+
+/**
+ * Formats an integer cents value to a BRL currency string.
+ * 4000 → "R$ 40,00" (non-breaking space between R$ and amount)
+ */
+export function formatCentsToBRL(cents: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
+}
