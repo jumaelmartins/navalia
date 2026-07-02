@@ -127,7 +127,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // 5. Run assistant
   try {
-    const today = new Date().toISOString().slice(0, 10) // "YYYY-MM-DD"
+    // I5: Use shop timezone to compute "today" so the AI doesn't pick the
+    // wrong date in the 21:00-00:00 UTC window (BRT = UTC-3).
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: shop.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
 
     const result = await runAssistant({
       channel: 'AI_WEB',

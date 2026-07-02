@@ -93,7 +93,7 @@ export function publicSystemPrompt(
 
   const toneGuide = isWhatsApp
     ? 'Responda de forma curta e direta, adequada para WhatsApp. Use linguagem amigável e informal, sem blocos longos de texto.'
-    : 'Seja simpático, objetivo e profissional.'
+    : 'Seja simpático, objetivo e profissional. Seja conciso e claro.'
 
   const addressLine = shop.address ? `Endereço: ${shop.address}` : ''
   const phoneLine = shop.phone ? `Telefone: ${shop.phone}` : ''
@@ -102,6 +102,14 @@ export function publicSystemPrompt(
     : ''
 
   const shopDetails = [addressLine, phoneLine, cancelLine].filter(Boolean).join('\n')
+
+  // I6: Rule 6 is channel-specific.
+  // WhatsApp: use the [HUMANO] marker so the pipeline can detect and transfer.
+  // AI_WEB: the widget has no human-agent channel; instruct the AI to suggest
+  //   calling the barbershop directly instead.
+  const humanRule = isWhatsApp
+    ? `6. Se o cliente pedir para falar com um humano/atendente, inclua obrigatoriamente o marcador [HUMANO] na resposta.`
+    : `6. Se o cliente pedir atendimento humano, oriente-o a ligar para a barbearia${shop.phone ? ' pelo número ' + shop.phone : ''} para falar com um atendente.`
 
   return `Você é o assistente virtual da barbearia *${shop.name}*. ${toneGuide}
 
@@ -117,7 +125,7 @@ REGRAS OBRIGATÓRIAS — siga sempre, sem exceção:
 3. SEMPRE pergunte o nome do cliente antes de iniciar um agendamento (se ainda não souber).
 4. NUNCA chame createAppointment sem que o cliente tenha confirmado explicitamente. Antes de agendar, apresente um resumo com serviço, data, hora e profissional, e aguarde a confirmação.
 5. Para temas fora da barbearia (política, receitas, tecnologia etc.), redirecione educadamente: "Posso ajudar apenas com informações e agendamentos da ${shop.name}. Posso fazer algo por você?"
-6. Se o cliente pedir para falar com um humano/atendente, inclua obrigatoriamente o marcador [HUMANO] na resposta.
+${humanRule}
 
 FLUXO DE AGENDAMENTO:
 • Use getServices para listar serviços disponíveis.

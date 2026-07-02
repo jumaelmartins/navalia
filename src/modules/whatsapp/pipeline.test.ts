@@ -87,6 +87,15 @@ vi.mock('./debounce', () => ({
 }))
 
 // ---------------------------------------------------------------------------
+// Mock: rateLimit
+// ---------------------------------------------------------------------------
+const mockRateLimit = vi.fn().mockResolvedValue({ allowed: true, remaining: 29 })
+
+vi.mock('@/lib/rate-limit', () => ({
+  rateLimit: (...args: unknown[]) => mockRateLimit(...args),
+}))
+
+// ---------------------------------------------------------------------------
 // Shared fixtures
 // ---------------------------------------------------------------------------
 const SHOP = {
@@ -129,6 +138,8 @@ beforeEach(() => {
 
   mockFindUniqueShop.mockResolvedValue(SHOP)
   mockHasAccess.mockReturnValue(true)
+  // Default: conversation is OPEN (used by flushToAI re-read check, I8)
+  mockFindUniqueConv.mockResolvedValue({ state: 'OPEN' })
   mockUpsertConv.mockResolvedValue(OPEN_CONV)
   mockUpdateConv.mockResolvedValue(OPEN_CONV)
   mockCreateMsg.mockResolvedValue({ id: 'wmsg-1' })
@@ -151,6 +162,7 @@ beforeEach(() => {
       await flush([payload])
     },
   )
+  mockRateLimit.mockResolvedValue({ allowed: true, remaining: 29 })
 })
 
 // ===========================================================================
@@ -577,5 +589,53 @@ describe('handleInboundMessage: [HUMANO] marker — replaceAll removes all occur
     expect(sentText).not.toContain('[HUMANO]')
     expect(sentText).toContain('Transferindo.')
     expect(sentText).toContain('Tenha um bom dia!')
+  })
+})
+
+// ===========================================================================
+// I7: Rate limit — silent drop after message persisted
+// ===========================================================================
+
+describe('handleInboundMessage: rate limit exceeded → silent drop', () => {
+  it('does NOT call scheduleDebounced when rate limit is exceeded', async () => {
+    mockRateLimit.mockResolvedValueOnce({ allowed: false, remaining: 0 })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    // Message should still be persisted
+    expect(mockCreateMsg).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ direction: 'INBOUND', senderType: 'CUSTOMER' }),
+      }),
+    )
+    // But bot should not run
+    expect(mockScheduleDebounced).not.toHaveBeenCalled()
+    expect(mockRunAssistant).not.toHaveBeenCalled()
+    expect(mockSendText).not.toHaveBeenCalled()
+  })
+
+  it('proceeds normally when rate limit is within bounds', async () => {
+    mockRateLimit.mockResolvedValueOnce({ allowed: true, remaining: 25 })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    expect(mockScheduleDebounced).toHaveBeenCalled()
+  })
+})
+
+// ===========================================================================
+// I8: flushToAI — state flipped during debounce window → no AI call
+// ===========================================================================
+
+describe('flushToAI: conversation state flipped to TRANSFERRED_TO_HUMAN during window', () => {
+  it('does NOT call runAssistant when conversation state is no longer OPEN', async () => {
+    // Simulate: by the time flushToAI runs (after debounce), the conv is
+    // TRANSFERRED_TO_HUMAN (human agent took over during the 4s window).
+    // mockFindUniqueConv is called by flushToAI for the I8 re-read.
+    mockFindUniqueConv.mockResolvedValue({ state: 'TRANSFERRED_TO_HUMAN' })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    expect(mockRunAssistant).not.toHaveBeenCalled()
   })
 })

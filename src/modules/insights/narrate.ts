@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getOpenAIClient, isOpenAIConfigured } from '@/lib/openai'
 import { getRedis } from '@/lib/redis'
 import { getDashboardKpis, subtractDays } from './queries'
+import { formatCentsToBRL } from '@/modules/tenancy/money'
 import type { AiResult } from '@/modules/ai/types'
 
 // ---------------------------------------------------------------------------
@@ -87,8 +88,10 @@ export async function getInsightsSummary(
       data: today,
       agendamentosHoje: kpis.todayCount,
       agendamentosSemana: kpis.weekCount,
-      receitaHoje: kpis.todayRevenueCents,
-      receitaSemana: kpis.weekRevenueCents,
+      // I2: pre-format revenue as BRL strings so the LLM receives "R$ 400,00"
+      // instead of raw cents (40000), which it misreads as "R$ 40.000".
+      receitaHojeFormatada: formatCentsToBRL(kpis.todayRevenueCents),
+      receitaSemanaFormatada: formatCentsToBRL(kpis.weekRevenueCents),
       ocupacaoPct: kpis.occupancyPct,
       taxaFalta: kpis.noShowRate,
       servicosPopulares: kpis.topServices,

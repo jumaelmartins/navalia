@@ -2,6 +2,7 @@ import 'server-only'
 import { prisma } from '@/lib/prisma'
 import { hasAccess } from '@/modules/billing/gate'
 import { isOpenAIConfigured } from '@/lib/openai'
+import { rateLimit } from '@/lib/rate-limit'
 import { runAssistant } from '@/modules/ai/orchestrator'
 import { buildPublicTools } from '@/modules/ai/tools/public-tools'
 import { publicSystemPrompt } from '@/modules/ai/prompts'
@@ -325,6 +326,16 @@ export async function handleInboundMessage({
     // ── 6. Persist INBOUND message ──────────────────────────────────────────────
     await persistMessage(shop, conversation, 'INBOUND', 'CUSTOMER', text)
 
+    // ── 6b. Rate limit — 30 messages per 5-minute window per (shop, phone) ──
+    // Silently drop after message is persisted so audit trail is intact.
+    // I7: protects OpenAI costs and prevents DoS via the public WhatsApp number.
+    try {
+      const rl = await rateLimit(`rl:wa:${shop.id}:${fromPhone}`, 30, 300)
+      if (!rl.allowed) return
+    } catch {
+      // Redis unavailable — fail open (don't block WhatsApp traffic)
+    }
+
     // ── 7. Debounce — collect burst; flush to AI after window closes ────────
     await scheduleDebounced(
       `wa:${shop.id}:${fromPhone}`,
@@ -360,6 +371,14 @@ async function flushToAI({
   conversation: ConvRecord
   fragments: string[]
 }): Promise<void> {
+  // I8: Re-read conversation state — the debounce window (4 s) is wide enough
+  // for a human agent to transfer the conversation. If state has changed to
+  // TRANSFERRED_TO_HUMAN (or CLOSED), skip the AI call entirely.
+  const freshConv = await prisma.whatsappConversation
+    .findUnique({ where: { id: conversation.id }, select: { state: true } })
+    .catch(() => null)
+  if (!freshConv || freshConv.state !== 'OPEN') return
+
   // Merge fragments (multi-message burst) into a single user message
   const userMessage = fragments.join('\n')
 

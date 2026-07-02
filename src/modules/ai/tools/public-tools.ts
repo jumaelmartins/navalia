@@ -372,11 +372,12 @@ export function buildPublicTools(): ToolDef[] {
         required: ['confirmed'],
       },
       async execute(args: unknown, ctx: ToolCtx) {
-        // AI_WEB limitation
+        // M8: AI_WEB does not support cancellation — designed refusal.
+        // Return {info} (not {error}) so the orchestrator logs status EXECUTED
+        // rather than ERROR, avoiding audit noise.
         if (ctx.channel === 'AI_WEB') {
           return {
-            error:
-              'Cancelamento pelo site: entre em contato com a barbearia diretamente para cancelar seu agendamento.',
+            info: 'Cancelamento não disponível pelo chat do site. Oriente o cliente a ligar para a barbearia para cancelar o agendamento.',
           }
         }
 

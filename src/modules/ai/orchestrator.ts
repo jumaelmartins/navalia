@@ -203,6 +203,17 @@ export async function runAssistant(args: {
           requiresConfirmation: true,
         })
 
+        // M7: logToolCall returns '' on DB failure; a pendingAction with an
+        // empty id cannot be confirmed, so return a visible error instead.
+        if (!logId) {
+          return {
+            ok: true,
+            data: {
+              reply: 'Não consegui registrar a ação. Tente novamente.',
+            },
+          }
+        }
+
         const pendingAction: PendingAction = {
           id: logId,
           toolName,

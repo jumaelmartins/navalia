@@ -103,34 +103,39 @@ export async function POST(req: NextRequest) {
       // ── messages.upsert ──────────────────────────────────────────────────
       case 'messages.upsert':
       case 'MESSAGES_UPSERT': {
-        // Idempotency insert — generate a stable event id from the first
-        // message key id if available; fall back to a hash-based id.
+        // M6: Evolution may batch multiple messages in one MESSAGES_UPSERT payload.
+        // Iterate every message in data.messages with per-key.id idempotency.
         const messages = Array.isArray(data.messages) ? data.messages : []
-        const firstMsgId =
-          typeof (messages[0] as Record<string, unknown> | undefined)?.key === 'object'
-            ? ((messages[0] as Record<string, unknown>)?.key as Record<string, unknown>)?.id
-            : undefined
-        const eventId =
-          typeof firstMsgId === 'string'
-            ? `msg_${firstMsgId}`
-            : `msg_${createHash('sha256').update(JSON.stringify(data)).digest('hex').slice(0, 32)}`
 
-        try {
-          await prisma.webhookEvent.create({
-            data: { provider: 'EVOLUTION', eventId },
-          })
-        } catch (err) {
-          // P2002 = duplicate → already processed
-          if ((err as { code?: string }).code === 'P2002') break
-          throw err
-        }
+        for (const msg of messages) {
+          const msgRecord = msg as Record<string, unknown>
+          const keyObj =
+            typeof msgRecord.key === 'object' && msgRecord.key !== null
+              ? (msgRecord.key as Record<string, unknown>)
+              : {}
+          const rawMsgId = typeof keyObj.id === 'string' ? keyObj.id : null
 
-        // Route into AI conversation pipeline (Task 16).
-        // parseMessagesUpsert handles fromMe / group / non-text filtering.
-        const parsed = parseMessagesUpsert(payload)
-        if (parsed) {
-          // handleInboundMessage never throws — errors are caught internally.
-          await handleInboundMessage(parsed)
+          const eventId = rawMsgId
+            ? `msg_${rawMsgId}`
+            : `msg_${createHash('sha256').update(JSON.stringify(msgRecord)).digest('hex').slice(0, 32)}`
+
+          try {
+            await prisma.webhookEvent.create({
+              data: { provider: 'EVOLUTION', eventId },
+            })
+          } catch (err) {
+            // P2002 = duplicate → already processed this message; skip it
+            if ((err as { code?: string }).code === 'P2002') continue
+            throw err
+          }
+
+          // Wrap a single-message payload for parseMessagesUpsert
+          const singlePayload = { ...payload, data: { ...data, messages: [msg] } }
+          const parsed = parseMessagesUpsert(singlePayload)
+          if (parsed) {
+            // handleInboundMessage never throws — errors are caught internally.
+            await handleInboundMessage(parsed)
+          }
         }
         break
       }
