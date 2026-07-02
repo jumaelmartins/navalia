@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { handleInboundMessage, parseMessagesUpsert } from '@/modules/whatsapp/pipeline'
 
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/evolution
@@ -124,9 +125,13 @@ export async function POST(req: NextRequest) {
           throw err
         }
 
-        // TODO(Task 16): Route incoming message into AI conversation pipeline.
-        // The message payload is in `data.messages[0]`.
-        // Pipeline entry: src/modules/whatsapp/conversation-pipeline.ts
+        // Route into AI conversation pipeline (Task 16).
+        // parseMessagesUpsert handles fromMe / group / non-text filtering.
+        const parsed = parseMessagesUpsert(payload)
+        if (parsed) {
+          // handleInboundMessage never throws — errors are caught internally.
+          await handleInboundMessage(parsed)
+        }
         break
       }
 
