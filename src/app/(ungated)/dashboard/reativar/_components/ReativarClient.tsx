@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AlertTriangleIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { authClient } from '@/lib/auth-client'
 import { createCheckoutSession } from '@/modules/billing/actions'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
@@ -39,11 +40,11 @@ export function ReativarClient({
       if (result.ok) {
         window.location.href = result.data.url
       } else {
-        alert(result.error)
+        toast.error(result.error)
         setLoading(false)
       }
     } catch {
-      alert('Erro ao iniciar assinatura. Tente novamente.')
+      toast.error('Erro ao iniciar assinatura. Tente novamente.')
       setLoading(false)
     }
   }

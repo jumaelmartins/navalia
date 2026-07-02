@@ -53,9 +53,10 @@ export async function createCheckoutSession(): Promise<ActionResult<{ url: strin
     let customerId = barbershop.stripeCustomerId ?? null
 
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        metadata: { barbershopId: barbershop.id },
-      })
+      const customer = await stripe.customers.create(
+        { metadata: { barbershopId: barbershop.id } },
+        { idempotencyKey: `customer-${barbershop.id}` },
+      )
       customerId = customer.id
 
       await prisma.barbershop.update({

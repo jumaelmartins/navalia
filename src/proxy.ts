@@ -28,10 +28,18 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  // Inject pathname so server-component layouts can gate-check per-route
-  // without triggering a redirect loop on exempt paths.
-  const response = NextResponse.next()
-  response.headers.set('x-pathname', pathname)
+  // Inject pathname into REQUEST headers so server-component layouts can
+  // gate-check per-route without triggering a redirect loop on exempt paths.
+  //
+  // SECURITY: We write into the *request* headers forwarded to the Next.js
+  // server via NextResponse.next({ request: { headers } }).  This OVERWRITES
+  // any x-pathname value the client may have sent, making header-spoofing
+  // impossible.  Setting a *response* header (the previous approach) had no
+  // effect on what `headers()` returns in RSC and could be spoofed by
+  // including x-pathname in the incoming request.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', request.nextUrl.pathname)
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
   return response
 }
 
