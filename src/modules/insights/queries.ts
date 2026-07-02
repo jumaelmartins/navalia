@@ -93,14 +93,14 @@ export async function getDashboardKpis(tenantId: string): Promise<DashboardKpis>
   const last30Start = subtractDays(today, 29) // inclusive: 30 days
 
   const [todayAppts, weekAppts, last30Appts, professionals] = await Promise.all([
-    // Today's CONFIRMED+COMPLETED appointments
+    // Today's non-CANCELLED appointments (count all; revenue from CONFIRMED+COMPLETED subset)
     prisma.appointment.findMany({
       where: {
         barbershopId: tenantId,
         date: today,
-        status: { in: ['CONFIRMED', 'COMPLETED'] },
+        status: { notIn: ['CANCELLED'] },
       },
-      select: { service: { select: { priceCents: true } } },
+      select: { status: true, service: { select: { priceCents: true } } },
     }),
     // This week's all non-cancelled appointments (for occupancy + counts)
     prisma.appointment.findMany({
@@ -134,15 +134,16 @@ export async function getDashboardKpis(tenantId: string): Promise<DashboardKpis>
 
   // ── Today KPIs ──
   const todayCount = todayAppts.length
-  const todayRevenueCents = todayAppts.reduce((s, a) => s + a.service.priceCents, 0)
+  const todayRevenueCents = todayAppts
+    .filter(a => a.status === 'CONFIRMED' || a.status === 'COMPLETED')
+    .reduce((s, a) => s + a.service.priceCents, 0)
 
   // ── Week KPIs (CONFIRMED+COMPLETED for revenue, all non-cancelled for count) ──
+  // weekAppts is already filtered to notIn ['CANCELLED'] at the DB level
   const weekRevAppts = weekAppts.filter(
     a => a.status === 'CONFIRMED' || a.status === 'COMPLETED',
   )
-  const weekCount = weekAppts.filter(
-    a => a.status !== 'CANCELLED',
-  ).length
+  const weekCount = weekAppts.length
   const weekRevenueCents = weekRevAppts.reduce((s, a) => s + a.service.priceCents, 0)
 
   // ── Occupancy ──

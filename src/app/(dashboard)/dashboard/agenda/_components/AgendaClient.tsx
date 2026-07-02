@@ -207,6 +207,7 @@ function AppointmentDialog({
   if (!appt) return null
 
   const canAct = appt.status === 'CONFIRMED' || appt.status === 'PENDING'
+  const isConfirmed = appt.status === 'CONFIRMED'
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -248,12 +249,16 @@ function AppointmentDialog({
         {/* Actions */}
         {canAct && !showReschedule && !showCancelConfirm && (
           <div className="flex flex-wrap gap-2 pt-2">
-            <Button size="sm" onClick={handleComplete} disabled={pending} className="hover:bg-primary-hover">
-              Concluir
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleNoShow} disabled={pending}>
-              Não compareceu
-            </Button>
+            {isConfirmed && (
+              <Button size="sm" onClick={handleComplete} disabled={pending} className="hover:bg-primary-hover">
+                Concluir
+              </Button>
+            )}
+            {isConfirmed && (
+              <Button size="sm" variant="outline" onClick={handleNoShow} disabled={pending}>
+                Não compareceu
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setShowReschedule(true)} disabled={pending}>
               Remarcar
             </Button>

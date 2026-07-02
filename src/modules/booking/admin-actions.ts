@@ -1,10 +1,28 @@
 'use server'
 
+import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { requireOnboarded } from '@/modules/tenancy/context'
 import { prisma } from '@/lib/prisma'
-import { getAvailableSlots, createAppointment } from './create-appointment'
-import { addMinutes } from './slots'
+import { getAvailableSlots, createAppointment, computeMinStart } from './create-appointment'
+import { addMinutes, computeSlots } from './slots'
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function dateToWeekday(date: string): number {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+}
+
+type BizHoursMap = Record<string, { start: string; end: string } | null>
+
+/** Returns true for errors that warrant a single full-transaction retry. */
+function isRetryableError(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false
+  return err.code === 'P2034' || err.code === 'P2002'
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -306,7 +324,7 @@ export async function cancelAppointmentAdmin(
 }
 
 // ---------------------------------------------------------------------------
-// rescheduleAppointment — validate via engine, then update (no cancel+recreate)
+// rescheduleAppointment — validate + update inside a Serializable transaction
 // ---------------------------------------------------------------------------
 
 export async function rescheduleAppointment(args: {
@@ -316,73 +334,119 @@ export async function rescheduleAppointment(args: {
 }): Promise<ActionResult> {
   const { barbershop, user } = await requireOnboarded()
 
-  // 1. Load the appointment (verify tenant + get context)
-  const appt = await prisma.appointment.findFirst({
-    where: {
-      id: args.id,
-      barbershopId: barbershop.id,
-      status: { in: ['PENDING', 'CONFIRMED'] },
-    },
-    include: { service: { select: { durationMin: true } } },
-  })
+  const runTx = async () =>
+    prisma.$transaction(
+      async tx => {
+        // 1. Load appointment (tenant-verified + reschedulable status)
+        const appt = await tx.appointment.findFirst({
+          where: {
+            id: args.id,
+            barbershopId: barbershop.id,
+            status: { in: ['PENDING', 'CONFIRMED'] },
+          },
+          include: { service: { select: { durationMin: true } } },
+        })
+        if (!appt) {
+          return {
+            ok: false as const,
+            error: 'Agendamento não encontrado ou não pode ser remarcado no status atual.',
+          }
+        }
 
-  if (!appt) {
-    return {
-      ok: false,
-      error: 'Agendamento não encontrado ou não pode ser remarcado no status atual.',
-    }
-  }
+        // 2. Shop business hours + timezone for slot computation
+        const shop = await tx.barbershop.findUnique({
+          where: { id: barbershop.id },
+          select: { businessHours: true, timezone: true },
+        })
+        if (!shop) return { ok: false as const, error: 'Barbearia não encontrada.' }
 
-  // 2. Validate the new slot via engine, excluding this appointment's own occupancy
-  const slotsResult = await getAvailableSlots({
-    tenantId: barbershop.id,
-    serviceId: appt.serviceId,
-    professionalId: appt.professionalId,
-    date: args.newDate,
-    excludeAppointmentId: args.id,
-  })
+        const weekday = dateToWeekday(args.newDate)
+        const bh = (shop.businessHours as BizHoursMap)[String(weekday)] ?? null
+        const minStart = computeMinStart(args.newDate, shop.timezone)
 
-  if (!slotsResult.ok) {
-    return { ok: false, error: 'Não foi possível verificar a disponibilidade.' }
-  }
+        // 3. Fresh availability for the new date (excluding this appointment's own occupancy)
+        const [rules, blocks, appointments] = await Promise.all([
+          tx.availabilityRule.findMany({
+            where: { professionalId: appt.professionalId, weekday },
+            select: { startTime: true, endTime: true },
+          }),
+          tx.scheduleBlock.findMany({
+            where: { professionalId: appt.professionalId, date: args.newDate },
+            select: { startTime: true, endTime: true },
+          }),
+          tx.appointment.findMany({
+            where: {
+              professionalId: appt.professionalId,
+              date: args.newDate,
+              status: { in: ['PENDING', 'CONFIRMED'] },
+              id: { not: args.id },
+            },
+            select: { startTime: true, endTime: true },
+          }),
+        ])
 
-  const profSlots = slotsResult.data.find(p => p.professionalId === appt.professionalId)
-  if (!profSlots || !profSlots.slots.includes(args.newStartTime)) {
-    return { ok: false, error: 'Horário indisponível. Escolha outro horário.' }
-  }
+        // 4. Compute slots and validate the requested start time
+        const slots = computeSlots({
+          businessHours: bh,
+          availabilityRules: rules.map(r => ({ start: r.startTime, end: r.endTime })),
+          blocks: blocks.map(b => ({ start: b.startTime, end: b.endTime })),
+          appointments: appointments.map(a => ({ start: a.startTime, end: a.endTime })),
+          durationMin: appt.service.durationMin,
+          minStart,
+        })
 
-  // 3. Compute new endTime
-  const newEndTime = addMinutes(args.newStartTime, appt.service.durationMin)
+        if (!slots.includes(args.newStartTime)) {
+          return { ok: false as const, error: 'Horário indisponível. Escolha outro horário.' }
+        }
 
-  // 4. Update appointment (preserving history — never cancel+recreate)
-  await prisma.appointment.update({
-    where: { id: args.id },
-    data: {
-      date: args.newDate,
-      startTime: args.newStartTime,
-      endTime: newEndTime,
-    },
-  })
+        // 5. Update appointment + AuditLog inside the transaction
+        const newEndTime = addMinutes(args.newStartTime, appt.service.durationMin)
 
-  await prisma.auditLog.create({
-    data: {
-      barbershopId: barbershop.id,
-      userId: user.id,
-      action: 'APPOINTMENT_RESCHEDULED',
-      entity: 'Appointment',
-      entityId: args.id,
-      payload: {
-        previousDate: appt.date,
-        previousStartTime: appt.startTime,
-        newDate: args.newDate,
-        newStartTime: args.newStartTime,
-        newEndTime,
+        await tx.appointment.update({
+          where: { id: args.id },
+          data: {
+            date: args.newDate,
+            startTime: args.newStartTime,
+            endTime: newEndTime,
+          },
+        })
+
+        await tx.auditLog.create({
+          data: {
+            barbershopId: barbershop.id,
+            userId: user.id,
+            action: 'APPOINTMENT_RESCHEDULED',
+            entity: 'Appointment',
+            entityId: args.id,
+            payload: {
+              previousDate: appt.date,
+              previousStartTime: appt.startTime,
+              newDate: args.newDate,
+              newStartTime: args.newStartTime,
+              newEndTime,
+            },
+          },
+        })
+
+        return { ok: true as const }
       },
-    },
-  })
+      { isolationLevel: 'Serializable' },
+    )
 
-  revalidatePath('/dashboard/agenda')
-  return { ok: true }
+  try {
+    const result = await runTx()
+    if (result.ok) revalidatePath('/dashboard/agenda')
+    return result
+  } catch (err) {
+    if (isRetryableError(err)) {
+      // One retry: covers PostgreSQL serialization failures (P2034) and
+      // concurrent unique-constraint races (P2002).
+      const result = await runTx()
+      if (result.ok) revalidatePath('/dashboard/agenda')
+      return result
+    }
+    throw err
+  }
 }
 
 // ---------------------------------------------------------------------------

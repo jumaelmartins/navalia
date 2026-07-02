@@ -54,7 +54,7 @@ function roundUpTo5Min(hhmm: string): string {
  * is today in the shop's timezone, or undefined for future/past dates.
  * Shared by getAvailableSlots and the createAppointment transaction.
  */
-function computeMinStart(date: string, timezone: string): string | undefined {
+export function computeMinStart(date: string, timezone: string): string | undefined {
   const shopDate = shopLocalDateString(timezone)
   if (date !== shopDate) return undefined
   return roundUpTo5Min(shopLocalTimeHHmm(timezone))

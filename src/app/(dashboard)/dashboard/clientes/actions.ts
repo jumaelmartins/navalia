@@ -12,19 +12,13 @@ export async function saveCustomerNotes(
 ): Promise<ActionResult> {
   const { barbershop } = await requireOnboarded()
 
-  const customer = await prisma.customer.findFirst({
+  const { count } = await prisma.customer.updateMany({
     where: { id: customerId, barbershopId: barbershop.id },
+    data: { notes: notes.trim() || null },
   })
-  if (!customer) return { ok: false, error: 'Cliente não encontrado.' }
 
-  try {
-    await prisma.customer.update({
-      where: { id: customerId },
-      data: { notes: notes.trim() || null },
-    })
-    revalidatePath('/dashboard/clientes')
-    return { ok: true }
-  } catch {
-    return { ok: false, error: 'Erro ao salvar notas.' }
-  }
+  if (count === 0) return { ok: false, error: 'Cliente não encontrado.' }
+
+  revalidatePath('/dashboard/clientes')
+  return { ok: true }
 }

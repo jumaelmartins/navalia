@@ -11,6 +11,7 @@ import {
   UserIcon,
   MessageSquareIcon,
   BotIcon,
+  SettingsIcon,
   MenuIcon,
   LogOutIcon,
   XIcon,
@@ -37,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Profissionais', href: '/dashboard/profissionais', icon: UserIcon },
   { label: 'WhatsApp', href: '#', icon: MessageSquareIcon, comingSoon: true },
   { label: 'Copiloto IA', href: '#', icon: BotIcon, comingSoon: true },
+  { label: 'Configurações', href: '#', icon: SettingsIcon, comingSoon: true },
 ]
 
 // ---------------------------------------------------------------------------
