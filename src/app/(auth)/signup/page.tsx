@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { authClient } from '@/lib/auth-client'
 import { signUpBarbershop } from '@/modules/tenancy/signup-action'
+import { BRAND } from '@/lib/brand'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -61,9 +62,13 @@ export default function SignupPage() {
   }
 
   return (
-    <Card className="w-full max-w-sm shadow-md">
+    <div className="flex flex-col items-center gap-6">
+      <Link href="/" className="font-display text-2xl font-semibold text-primary">
+        {BRAND.name}
+      </Link>
+      <Card className="w-full max-w-sm shadow-md">
       <CardHeader className="pb-2">
-        <CardTitle className="text-2xl font-semibold">Criar conta</CardTitle>
+        <CardTitle className="text-2xl font-semibold font-display">Criar conta</CardTitle>
         <CardDescription>Comece seu período de avaliação gratuito de 7 dias</CardDescription>
       </CardHeader>
 
@@ -143,5 +148,6 @@ export default function SignupPage() {
         </p>
       </CardContent>
     </Card>
+    </div>
   )
 }

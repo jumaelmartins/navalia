@@ -85,6 +85,13 @@ export async function signUpBarbershop(input: SignUpInput): Promise<SignUpResult
     return { ok: true }
   } catch (err) {
     console.error('[signUpBarbershop] transaction error', err)
+    // Compensate: delete the auth user so a retry with the same e-mail works.
+    // Session and Account have onDelete: Cascade, so deleting the user is enough.
+    try {
+      await prisma.user.delete({ where: { id: userId } })
+    } catch (deleteErr) {
+      console.error('[signUpBarbershop] compensating delete failed', deleteErr)
+    }
     return { ok: false, error: 'Erro ao criar barbearia. Tente novamente.' }
   }
 }

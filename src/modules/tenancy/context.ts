@@ -9,13 +9,14 @@ import { prisma } from '@/lib/prisma'
  * Ex.: 'Barbearia do João' → 'barbearia-do-joao'
  */
 export function slugify(name: string): string {
-  return name
+  const result = name
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // remove marcas diacríticas (acentos)
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '') // mantém letras, dígitos, espaços e hífens
     .trim()
     .replace(/[\s-]+/g, '-') // espaços/hífens consecutivos → um hífen
+  return result || 'barbearia'
 }
 
 /**

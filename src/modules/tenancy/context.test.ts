@@ -26,6 +26,10 @@ describe('slugify', () => {
   it('trims leading and trailing whitespace', () => {
     expect(slugify('  Navalia  ')).toBe('navalia')
   })
+
+  it("returns 'barbearia' when all characters are stripped", () => {
+    expect(slugify('!!!')).toBe('barbearia')
+  })
 })
 
 describe('computeTrialEnd', () => {
