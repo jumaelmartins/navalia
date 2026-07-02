@@ -20,7 +20,7 @@ services:
   evolution:
     # spec said atendai/evolution-api, but that tag is unavailable on Docker Hub;
     # evoapicloud/ is the current official namespace for Evolution API v2
-    image: evoapicloud/evolution-api:v2.2.3
+    image: evoapicloud/evolution-api:v2.3.7
     ports: ["8080:8080"]
     environment:
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-navalia-dev-key}

@@ -75,7 +75,7 @@ services:
 
   # ── Evolution API v2 (WhatsApp) ───────────────────────────────────────────
   evolution:
-    image: evoapicloud/evolution-api:v2.2.3
+    image: evoapicloud/evolution-api:v2.3.7
     restart: unless-stopped
     environment:
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
