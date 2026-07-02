@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { requireMember } from '@/modules/tenancy/context'
+import { Toaster } from '@/components/ui/sonner'
 
 // Temporary minimal nav — Task 11 replaces with full sidebar
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </nav>
       {children}
+      <Toaster />
     </div>
   )
 }

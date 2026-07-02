@@ -21,7 +21,7 @@ export async function listServices() {
     orderBy: { sortOrder: 'asc' },
     include: { _count: { select: { professionals: true } } },
   })
-  return { ok: true as const, data: services }
+  return { ok: true as const, data: services } as const
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +77,10 @@ export async function updateService(
   const parsed = ServicePatchSchema.safeParse(patch)
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }
+  }
+
+  if (Object.keys(parsed.data).length === 0) {
+    return { ok: false, error: 'Nenhum campo para atualizar.' }
   }
 
   const existing = await prisma.service.findFirst({

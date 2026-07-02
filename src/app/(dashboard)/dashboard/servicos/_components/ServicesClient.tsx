@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { ScissorsIcon, ChevronUpIcon, ChevronDownIcon, PencilIcon } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -60,7 +61,10 @@ export function ServicesClient({ services }: { services: ServiceRow[] }) {
 
   function handleToggle(id: string) {
     startTransition(async () => {
-      await toggleService(id)
+      const result = await toggleService(id)
+      if (!result.ok) {
+        toast.error(result.error)
+      }
     })
   }
 
@@ -69,7 +73,10 @@ export function ServicesClient({ services }: { services: ServiceRow[] }) {
     startTransition(async () => {
       const ids = services.map((s) => s.id)
       ;[ids[index - 1], ids[index]] = [ids[index], ids[index - 1]]
-      await reorderServices(ids)
+      const result = await reorderServices(ids)
+      if (!result.ok) {
+        toast.error(result.error)
+      }
     })
   }
 
@@ -78,7 +85,10 @@ export function ServicesClient({ services }: { services: ServiceRow[] }) {
     startTransition(async () => {
       const ids = services.map((s) => s.id)
       ;[ids[index], ids[index + 1]] = [ids[index + 1], ids[index]]
-      await reorderServices(ids)
+      const result = await reorderServices(ids)
+      if (!result.ok) {
+        toast.error(result.error)
+      }
     })
   }
 
