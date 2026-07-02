@@ -40,7 +40,7 @@ export function HowItWorks() {
               {/* Connector line (desktop only) */}
               {index < steps.length - 1 && (
                 <div
-                  className="hidden md:block absolute top-7 left-[calc(100%+1px)] w-full h-px bg-border"
+                  className="hidden md:block absolute top-7 left-full w-8 h-px bg-border"
                   aria-hidden="true"
                 />
               )}

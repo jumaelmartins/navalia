@@ -1,5 +1,7 @@
 /* ─── Feature blocks (alternating layout) ──────────────────────────────────── */
 
+import { BRAND } from '@/lib/brand'
+
 export function Features() {
   return (
     <section id="funcionalidades" className="px-6 py-24 md:py-32">
@@ -79,7 +81,7 @@ function FeatureBlock({ eyebrow, headline, body, bullets, mock, reverse }: Featu
         <ul className="space-y-3">
           {bullets.map((item) => (
             <li key={item} className="flex items-start gap-3 text-sm text-muted-foreground">
-              <span className="mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full bg-primary/70 mt-1.5" aria-hidden="true" />
+              <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-primary/70 mt-1.5" aria-hidden="true" />
               {item}
             </li>
           ))}
@@ -170,7 +172,7 @@ function WhatsappMock() {
           <span className="text-xs font-semibold text-primary font-display">IA</span>
         </div>
         <div>
-          <p className="text-sm font-semibold text-foreground">Navalia — Assistente</p>
+          <p className="text-sm font-semibold text-foreground">{BRAND.name} — Assistente</p>
           <p className="text-xs text-muted-foreground">WhatsApp conectado</p>
         </div>
         <div className="ml-auto flex items-center gap-1">
@@ -180,7 +182,7 @@ function WhatsappMock() {
       </div>
 
       {/* Chat messages */}
-      <div className="p-4 space-y-3 bg-[#171412]">
+      <div className="p-4 space-y-3 bg-background">
         <ChatBubble from="client" text="Oi! Quero agendar um corte amanhã à tarde, tem horário?" />
         <ChatBubble
           from="ai"
@@ -203,9 +205,9 @@ function WhatsappMock() {
         <div className="flex-1 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground/50">
           Mensagem
         </div>
-        <div className="size-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+        <div className="size-8 rounded-full bg-primary flex items-center justify-center shrink-0 text-primary-foreground">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M11 1L6 6M11 1H7M11 1V5" stroke="#0f0d0b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M11 1L6 6M11 1H7M11 1V5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
       </div>

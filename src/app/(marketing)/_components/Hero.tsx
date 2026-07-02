@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BRAND } from '@/lib/brand'
 
 export function Hero() {
   return (
@@ -11,7 +12,7 @@ export function Hero() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 80% 60% at 70% 50%, rgba(196,150,74,0.04) 0%, transparent 70%)',
+            'radial-gradient(ellipse 80% 60% at 70% 50%, color-mix(in srgb, var(--primary) 4%, transparent) 0%, transparent 70%)',
         }}
         aria-hidden="true"
       />
@@ -82,7 +83,7 @@ function AgendaMock() {
           <div className="size-2.5 rounded-full bg-border" />
         </div>
         <div className="flex-1 ml-2 rounded-md bg-background/70 px-3 py-1 text-xs text-muted-foreground font-mono tracking-tight">
-          app.navalia.com.br/agenda
+          {`app.${BRAND.domain}/agenda`}
         </div>
       </div>
 
