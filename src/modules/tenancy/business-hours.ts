@@ -2,8 +2,9 @@ import { z } from 'zod'
 
 /**
  * Validates a single "HH:mm" time string.
+ * HH must be 00–23, mm must be 00–59.
  */
-const TimeSchema = z.string().regex(/^\d{2}:\d{2}$/, 'Formato de hora inválido — use HH:mm.')
+const TimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Formato de hora inválido — use HH:mm.')
 
 /**
  * A single day's schedule: null means the shop is closed that day.

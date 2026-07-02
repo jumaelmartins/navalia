@@ -133,6 +133,14 @@ export async function createFirstProfessional(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }
   }
 
+  // Idempotency guard: if a professional already exists for this barbershop, return success
+  const existingProfessional = await prisma.professional.findFirst({
+    where: { barbershopId: barbershop.id },
+  })
+  if (existingProfessional) {
+    return { ok: true, data: { id: existingProfessional.id } }
+  }
+
   // Fetch the first active service and the shop's businessHours for mirroring
   const [firstService, shop] = await Promise.all([
     prisma.service.findFirst({

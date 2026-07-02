@@ -38,6 +38,22 @@ describe('parseBRLToCents', () => {
   it('negative value → null', () => {
     expect(parseBRLToCents('-5')).toBeNull()
   })
+
+  it('"1.234,56" (thousands + comma) → 123456', () => {
+    expect(parseBRLToCents('1.234,56')).toBe(123456)
+  })
+
+  it('"1.234" (thousands, no decimal) → 123400', () => {
+    expect(parseBRLToCents('1.234')).toBe(123400)
+  })
+
+  it('"39.90" (dot decimal) → 3990', () => {
+    expect(parseBRLToCents('39.90')).toBe(3990)
+  })
+
+  it('"39,90" (comma decimal) → 3990', () => {
+    expect(parseBRLToCents('39,90')).toBe(3990)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -108,5 +124,20 @@ describe('BusinessHoursSchema', () => {
       '1': { start: '09:00', end: '19:00' },
     }
     expect(BusinessHoursSchema.safeParse(incomplete).success).toBe(false)
+  })
+
+  it('rejects invalid time "99:99"', () => {
+    const data = { ...VALID_WEEK, '1': { start: '99:99', end: '19:00' } }
+    expect(BusinessHoursSchema.safeParse(data).success).toBe(false)
+  })
+
+  it('rejects invalid time "24:00"', () => {
+    const data = { ...VALID_WEEK, '1': { start: '24:00', end: '19:00' } }
+    expect(BusinessHoursSchema.safeParse(data).success).toBe(false)
+  })
+
+  it('rejects invalid time "09:60"', () => {
+    const data = { ...VALID_WEEK, '1': { start: '09:60', end: '19:00' } }
+    expect(BusinessHoursSchema.safeParse(data).success).toBe(false)
   })
 })
