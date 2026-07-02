@@ -94,6 +94,8 @@ export async function getAvailableSlots(args: {
   serviceId: string
   professionalId: string | null
   date: string
+  /** Optional: exclude this appointment's own occupancy (used during reschedule) */
+  excludeAppointmentId?: string
 }): Promise<Result<{ professionalId: string; slots: string[] }[]>> {
   // 1. Validate service belongs to tenant and is active
   const service = await prisma.service.findFirst({
@@ -147,6 +149,7 @@ export async function getAvailableSlots(args: {
             professionalId,
             date: args.date,
             status: { in: ['PENDING', 'CONFIRMED'] },
+            ...(args.excludeAppointmentId ? { id: { not: args.excludeAppointmentId } } : {}),
           },
           select: { startTime: true, endTime: true },
         }),
