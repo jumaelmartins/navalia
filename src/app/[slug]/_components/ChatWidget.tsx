@@ -165,7 +165,11 @@ export function ChatWidget({ slug, shopName }: Props) {
             </div>
 
             {/* Messages list */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
+            <div
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0"
+              role="log"
+              aria-live="polite"
+            >
               {/* Empty state — suggestion chips */}
               {messages.length === 0 && !pending && (
                 <div className="space-y-3">

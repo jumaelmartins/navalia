@@ -8,10 +8,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ---------------------------------------------------------------------------
-// In-memory Redis stub — implements only ops used by rateLimit: incr, expire
+// In-memory Redis stub — implements ops used by rateLimit: incr, expire, ttl
 // ---------------------------------------------------------------------------
 class MemRedis {
   private strings = new Map<string, string>()
+  private keysTTL = new Map<string, number>() // Track which keys have TTL set
+  expireCalls: { key: string; seconds: number }[] = [] // Track expire() calls for testing
 
   async incr(key: string): Promise<number> {
     const cur = this.strings.get(key)
@@ -20,8 +22,17 @@ class MemRedis {
     return next
   }
 
-  async expire(_key: string, _seconds: number): Promise<number> {
-    return 1 // no-op in tests (TTL semantics not needed for unit coverage)
+  async expire(key: string, seconds: number): Promise<number> {
+    this.expireCalls.push({ key, seconds })
+    this.keysTTL.set(key, seconds)
+    return 1
+  }
+
+  async ttl(key: string): Promise<number> {
+    // Return -1 if key exists but has no TTL, -2 if key doesn't exist, or remaining TTL
+    if (!this.strings.has(key)) return -2
+    if (this.keysTTL.has(key)) return this.keysTTL.get(key)!
+    return -1 // Key exists but no TTL set (orphaned key)
   }
 }
 
@@ -86,5 +97,24 @@ describe('rateLimit — key isolation', () => {
     expect(overA.allowed).toBe(false)
     expect(firstB.allowed).toBe(true)
     expect(firstB.remaining).toBe(1)
+  })
+})
+
+describe('rateLimit — self-healing TTL (orphaned key recovery)', () => {
+  it('re-applies expiry when a key loses its TTL', async () => {
+    // Pre-seed a key without TTL (orphaned key scenario)
+    await memRedis.incr('orphaned:key')
+    // Verify it exists but has no TTL
+    expect(await memRedis.ttl('orphaned:key')).toBe(-1)
+
+    // Call rateLimit on the orphaned key
+    const result = await rateLimit('orphaned:key', 5, 300)
+
+    // Should detect the missing TTL and re-apply it
+    expect(result.allowed).toBe(true)
+    // Verify that expire() was called to heal the key
+    const expireCalls = memRedis.expireCalls.filter(c => c.key === 'orphaned:key')
+    expect(expireCalls.length).toBeGreaterThan(0)
+    expect(expireCalls[expireCalls.length - 1].seconds).toBe(300)
   })
 })

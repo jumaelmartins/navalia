@@ -33,11 +33,31 @@ const BodySchema = z.object({
 // IP helper
 // ---------------------------------------------------------------------------
 
+/**
+ * Extract client IP from request headers.
+ *
+ * Deployment assumption: A reverse proxy (Caddy) is configured to set X-Forwarded-For.
+ * Without a proxy, all clients share the 'unknown' bucket — acceptable in dev only.
+ *
+ * Fallback chain:
+ *   1. X-Forwarded-For (first value, before any commas)
+ *   2. X-Real-IP
+ *   3. 'unknown' (conservative default)
+ */
 function getClientIp(req: NextRequest): string {
+  // X-Forwarded-For may contain a comma-separated list (proxy chain)
   const forwarded = req.headers.get('x-forwarded-for')
   if (forwarded) {
     return forwarded.split(',')[0].trim()
   }
+
+  // Fallback to X-Real-IP if X-Forwarded-For is absent
+  const realIp = req.headers.get('x-real-ip')
+  if (realIp) {
+    return realIp.trim()
+  }
+
+  // Conservative default when no proxy headers are present
   return 'unknown'
 }
 
@@ -96,7 +116,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         error:
           'Limite de mensagens atingido. Aguarde alguns minutos antes de continuar.',
       },
-      { status: 429 },
+      { status: 429, headers: { 'Retry-After': '300' } },
     )
   }
 
