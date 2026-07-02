@@ -135,7 +135,25 @@ export async function runAssistant(args: {
 
     for (const rawToolCall of message.tool_calls) {
       // Only handle function-type tool calls (skip 'custom' tool calls)
-      if (rawToolCall.type !== 'function') continue
+      if (rawToolCall.type !== 'function') {
+        // Non-function tool call: push error result and log as ERROR
+        const errorContent = JSON.stringify({
+          error: `Tipo de ferramenta não suportado: ${rawToolCall.type}`,
+        })
+        toolResultMessages.push({
+          role: 'tool',
+          tool_call_id: rawToolCall.id,
+          content: errorContent,
+        })
+        await logToolCall({
+          ctx,
+          toolName: `[${rawToolCall.type}]`,
+          input: {},
+          output: { error: `Tipo de ferramenta não suportado: ${rawToolCall.type}` },
+          status: 'ERROR',
+        })
+        continue
+      }
       const toolCall = rawToolCall as ChatCompletionMessageFunctionToolCall
 
       const toolName = toolCall.function.name
@@ -143,13 +161,26 @@ export async function runAssistant(args: {
 
       // Unknown tool
       if (!toolDef) {
-        const errorContent = JSON.stringify({
-          error: `Ferramenta "${toolName}" não reconhecida.`,
-        })
+        const errorResult = { error: `Ferramenta "${toolName}" não reconhecida.` }
+        const errorContent = JSON.stringify(errorResult)
         toolResultMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
           content: errorContent,
+        })
+        // Log the unknown tool call as ERROR (Fix 1)
+        let parsedArgs: unknown
+        try {
+          parsedArgs = JSON.parse(toolCall.function.arguments)
+        } catch {
+          parsedArgs = {}
+        }
+        await logToolCall({
+          ctx,
+          toolName,
+          input: parsedArgs,
+          output: errorResult,
+          status: 'ERROR',
         })
         continue
       }
@@ -222,6 +253,20 @@ export async function runAssistant(args: {
         resultForModel = rest
       } else {
         resultForModel = rawResult
+      }
+
+      // Fix 4: Detect Zod-validation failures (error-only result objects)
+      // When a tool returns {error: '...'} with no other keys, log as ERROR (unless it's a guard-trip)
+      if (
+        logStatus === 'EXECUTED' &&
+        !requiresConfirmation &&
+        typeof resultForModel === 'object' &&
+        resultForModel !== null
+      ) {
+        const keys = Object.keys(resultForModel as Record<string, unknown>)
+        if (keys.length === 1 && keys[0] === 'error') {
+          logStatus = 'ERROR'
+        }
       }
 
       // Log every tool call

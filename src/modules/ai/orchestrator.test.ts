@@ -460,6 +460,102 @@ describe('(g) WHATSAPP channel forces ctx.customerPhone', () => {
 })
 
 // ---------------------------------------------------------------------------
+// (h) Unknown-tool-name call → AiActionLog ERROR row written
+// ---------------------------------------------------------------------------
+
+describe('(h) unknown-tool-name call → AiActionLog ERROR row written', () => {
+  it('logs ERROR when model calls a non-existent tool', async () => {
+    const client = buildMockClient([
+      toolCallResponse('call-bad', 'nonExistentTool', { param: 'value' }),
+      textResponse('Desculpe, não consegui encontrar essa ferramenta.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Call a tool that does not exist',
+      tools: [echoTool()],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+
+    // AiActionLog should have been created with ERROR status for the unknown tool
+    expect(mockAiActionLogCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          toolName: 'nonExistentTool',
+          status: 'ERROR',
+          barbershopId: 'shop-1',
+          channel: 'AI_WEB',
+        }),
+      }),
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (i) createAppointment with confirmed: "true" (string) → validation error
+// ---------------------------------------------------------------------------
+
+describe('(i) createAppointment with invalid confirmed type', () => {
+  it('rejects confirmed as string, not boolean; logs ERROR; engine not called', async () => {
+    const { buildPublicTools } = await import('./tools/public-tools')
+
+    const tools = buildPublicTools()
+    const createTool = tools.find(t => t.name === 'createAppointment')!
+
+    const client = buildMockClient([
+      toolCallResponse('call-string-bool', 'createAppointment', {
+        serviceId: 'svc-1',
+        professionalId: 'prof-1',
+        date: '2026-08-01',
+        startTime: '10:00',
+        customerName: 'João',
+        customerPhone: '11999990001',
+        confirmed: 'true', // STRING, not boolean
+      }),
+      textResponse('Houve um erro na validação.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Agendar',
+      tools: [createTool],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+
+    // Engine must NOT have been called
+    expect(mockEngineCreate).not.toHaveBeenCalled()
+
+    // AiActionLog should have ERROR status (Zod validation failure)
+    expect(mockAiActionLogCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          toolName: 'createAppointment',
+          status: 'ERROR',
+        }),
+      }),
+    )
+
+    // The tool result message should contain an error about invalid arguments
+    const secondCall = client.chat.completions.create.mock.calls[1]
+    const messages = secondCall[0].messages as Array<{ role: string; content: string }>
+    const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMsg?.content).toContain('Argumentos inválidos')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Extra: OpenAI API error → Result.ok: false
 // ---------------------------------------------------------------------------
 

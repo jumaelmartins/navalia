@@ -219,7 +219,7 @@ export function buildPublicTools(): ToolDef[] {
           const profMap = new Map<string, string>()
           if (profIds.length > 0) {
             const profs = await prisma.professional.findMany({
-              where: { id: { in: profIds } },
+              where: { id: { in: profIds }, barbershopId: ctx.tenantId },
               select: { id: true, name: true },
             })
             profs.forEach(p => profMap.set(p.id, p.name))
