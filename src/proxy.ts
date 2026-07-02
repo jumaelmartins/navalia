@@ -28,7 +28,11 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  // Inject pathname so server-component layouts can gate-check per-route
+  // without triggering a redirect loop on exempt paths.
+  const response = NextResponse.next()
+  response.headers.set('x-pathname', pathname)
+  return response
 }
 
 export const config = {
