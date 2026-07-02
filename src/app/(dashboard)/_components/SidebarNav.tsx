@@ -36,7 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Clientes', href: '/dashboard/clientes', icon: UsersIcon },
   { label: 'Serviços', href: '/dashboard/servicos', icon: ScissorsIcon },
   { label: 'Profissionais', href: '/dashboard/profissionais', icon: UserIcon },
-  { label: 'WhatsApp', href: '#', icon: MessageSquareIcon, comingSoon: true },
+  { label: 'WhatsApp', href: '/dashboard/whatsapp', icon: MessageSquareIcon },
   { label: 'Copiloto IA', href: '#', icon: BotIcon, comingSoon: true },
   { label: 'Configurações', href: '/dashboard/configuracoes/assinatura', icon: SettingsIcon },
 ]
