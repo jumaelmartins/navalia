@@ -58,3 +58,13 @@ export async function requireOwner(): Promise<TenantContext> {
   if (ctx.user.role !== 'OWNER') redirect('/dashboard')
   return ctx
 }
+
+/**
+ * Guard server-side: igual a requireMember, mas exige que o onboarding
+ * já esteja completo. Onboarding incompleto → redirect('/dashboard/onboarding').
+ */
+export async function requireOnboarded(): Promise<TenantContext> {
+  const ctx = await requireMember()
+  if (!ctx.barbershop.onboardingCompleted) redirect('/dashboard/onboarding')
+  return ctx
+}
