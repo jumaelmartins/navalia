@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { AppointmentSource, Result } from './types'
-import { addMinutes, computeSlots } from './slots'
+import { addMinutes, computeSlots, isCanonicalDate } from './slots'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -97,6 +97,9 @@ export async function getAvailableSlots(args: {
   /** Optional: exclude this appointment's own occupancy (used during reschedule) */
   excludeAppointmentId?: string
 }): Promise<Result<{ professionalId: string; slots: string[] }[]>> {
+  // 0. Validate canonical date format + real calendar date
+  if (!isCanonicalDate(args.date)) return { ok: false, error: 'OUTSIDE_AVAILABILITY' }
+
   // 1. Validate service belongs to tenant and is active
   const service = await prisma.service.findFirst({
     where: { id: args.serviceId, barbershopId: args.tenantId, isActive: true },
@@ -137,15 +140,16 @@ export async function getAvailableSlots(args: {
     profLinks.map(async ({ professionalId }) => {
       const [rules, blocks, appointments] = await Promise.all([
         prisma.availabilityRule.findMany({
-          where: { professionalId, weekday },
+          where: { barbershopId: args.tenantId, professionalId, weekday },
           select: { startTime: true, endTime: true },
         }),
         prisma.scheduleBlock.findMany({
-          where: { professionalId, date: args.date },
+          where: { barbershopId: args.tenantId, professionalId, date: args.date },
           select: { startTime: true, endTime: true },
         }),
         prisma.appointment.findMany({
           where: {
+            barbershopId: args.tenantId,
             professionalId,
             date: args.date,
             status: { in: ['PENDING', 'CONFIRMED'] },
@@ -191,6 +195,9 @@ export async function createAppointment(args: {
     serviceName: string
   }>
 > {
+  // Validate canonical date before entering the transaction (C1)
+  if (!isCanonicalDate(args.date)) return { ok: false, error: 'OUTSIDE_AVAILABILITY' }
+
   // Fix 3: Validate phone before entering the transaction
   const phone = normalizePhone(args.customer.phone)
   if (phone === null) return { ok: false, error: 'INVALID_PHONE' }
@@ -238,15 +245,16 @@ export async function createAppointment(args: {
         // --- 4. Fresh availability inside the transaction ---
         const [rules, blocks, existingAppts] = await Promise.all([
           tx.availabilityRule.findMany({
-            where: { professionalId: args.professionalId, weekday },
+            where: { barbershopId: args.tenantId, professionalId: args.professionalId, weekday },
             select: { startTime: true, endTime: true },
           }),
           tx.scheduleBlock.findMany({
-            where: { professionalId: args.professionalId, date: args.date },
+            where: { barbershopId: args.tenantId, professionalId: args.professionalId, date: args.date },
             select: { startTime: true, endTime: true },
           }),
           tx.appointment.findMany({
             where: {
+              barbershopId: args.tenantId,
               professionalId: args.professionalId,
               date: args.date,
               status: { in: ['PENDING', 'CONFIRMED'] },

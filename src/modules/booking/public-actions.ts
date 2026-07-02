@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { hasAccess } from '@/modules/billing/gate'
 import { getAvailableSlots, createAppointment } from './create-appointment'
-import type { BookingError } from './types'
+import { BOOKING_ERROR_PT_BR } from './types'
 
 // ---------------------------------------------------------------------------
 // Access rule helper — delegates to billing gate (single source of truth)
@@ -47,6 +47,7 @@ export type PublicShop = {
   phone: string | null
   address: string | null
   logoUrl: string | null
+  timezone: string
   businessHours: Record<string, { start: string; end: string } | null>
   cancellationPolicy: string | null
   services: PublicService[]
@@ -91,6 +92,7 @@ export async function getPublicShop(slug: string): Promise<PublicShop | null> {
     phone: shop.phone,
     address: shop.address,
     logoUrl: shop.logoUrl,
+    timezone: shop.timezone,
     businessHours: shop.businessHours as Record<string, { start: string; end: string } | null>,
     cancellationPolicy: shop.cancellationPolicy,
     services: shop.services,
@@ -107,15 +109,6 @@ export async function getPublicShop(slug: string): Promise<PublicShop | null> {
 // ---------------------------------------------------------------------------
 // getPublicSlots
 // ---------------------------------------------------------------------------
-
-const PT_BR_ERRORS: Record<BookingError, string> = {
-  SLOT_TAKEN: 'Esse horário acabou de ser reservado. Escolha outro.',
-  INVALID_SERVICE: 'Serviço não encontrado.',
-  INVALID_PROFESSIONAL: 'Profissional não encontrado.',
-  OUTSIDE_AVAILABILITY: 'Horário fora da disponibilidade.',
-  INVALID_PHONE: 'Telefone inválido.',
-  NOT_FOUND: 'Agendamento não encontrado.',
-}
 
 type SlotsResult =
   | { ok: true; data: { professionalId: string; slots: string[] }[] }
@@ -150,7 +143,7 @@ export async function getPublicSlots(args: {
     })
 
     if (!result.ok) {
-      return { ok: false, error: PT_BR_ERRORS[result.error] }
+      return { ok: false, error: BOOKING_ERROR_PT_BR[result.error] }
     }
 
     return { ok: true, data: result.data }
@@ -212,7 +205,7 @@ export async function createPublicAppointment(args: {
     if (!result.ok) {
       return {
         ok: false,
-        error: PT_BR_ERRORS[result.error],
+        error: BOOKING_ERROR_PT_BR[result.error],
         slotTaken: result.error === 'SLOT_TAKEN',
       }
     }

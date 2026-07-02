@@ -25,4 +25,14 @@ export type BookingError =
   | 'INVALID_PHONE'
   | 'NOT_FOUND'
 
+/** Single source of truth for pt-BR booking error messages. */
+export const BOOKING_ERROR_PT_BR: Record<BookingError, string> = {
+  SLOT_TAKEN: 'Esse horário acabou de ser reservado. Escolha outro.',
+  INVALID_SERVICE: 'Serviço não encontrado.',
+  INVALID_PROFESSIONAL: 'Profissional não encontrado.',
+  OUTSIDE_AVAILABILITY: 'Horário fora da disponibilidade.',
+  INVALID_PHONE: 'Telefone inválido.',
+  NOT_FOUND: 'Agendamento não encontrado.',
+}
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: BookingError }

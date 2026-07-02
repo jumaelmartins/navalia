@@ -1,6 +1,28 @@
 import type { SlotInput } from './types'
 
 // ---------------------------------------------------------------------------
+// Date canonicalization guard
+// ---------------------------------------------------------------------------
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Returns true only when `date` is a valid ISO calendar date in the form
+ * "YYYY-MM-DD" with no padding shortcuts (e.g. "2026-7-6" → false) and
+ * the calendar date actually exists (e.g. "2026-02-30" → false).
+ */
+export function isCanonicalDate(date: string): boolean {
+  if (!DATE_REGEX.test(date)) return false
+  const [y, m, d] = date.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() === m - 1 &&
+    dt.getUTCDate() === d
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Low-level helpers — minutes-since-midnight, no Date objects
 // ---------------------------------------------------------------------------
 

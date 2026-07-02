@@ -5,7 +5,8 @@ import { revalidatePath } from 'next/cache'
 import { requireOnboarded } from '@/modules/tenancy/context'
 import { prisma } from '@/lib/prisma'
 import { getAvailableSlots, createAppointment, computeMinStart } from './create-appointment'
-import { addMinutes, computeSlots } from './slots'
+import { addMinutes, computeSlots, isCanonicalDate } from './slots'
+import { BOOKING_ERROR_PT_BR } from './types'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -334,6 +335,11 @@ export async function rescheduleAppointment(args: {
 }): Promise<ActionResult> {
   const { barbershop, user } = await requireOnboarded()
 
+  // Validate canonical date before entering the transaction (C1)
+  if (!isCanonicalDate(args.newDate)) {
+    return { ok: false, error: 'Horário indisponível. Escolha outro horário.' }
+  }
+
   const runTx = async () =>
     prisma.$transaction(
       async tx => {
@@ -367,15 +373,16 @@ export async function rescheduleAppointment(args: {
         // 3. Fresh availability for the new date (excluding this appointment's own occupancy)
         const [rules, blocks, appointments] = await Promise.all([
           tx.availabilityRule.findMany({
-            where: { professionalId: appt.professionalId, weekday },
+            where: { barbershopId: barbershop.id, professionalId: appt.professionalId, weekday },
             select: { startTime: true, endTime: true },
           }),
           tx.scheduleBlock.findMany({
-            where: { professionalId: appt.professionalId, date: args.newDate },
+            where: { barbershopId: barbershop.id, professionalId: appt.professionalId, date: args.newDate },
             select: { startTime: true, endTime: true },
           }),
           tx.appointment.findMany({
             where: {
+              barbershopId: barbershop.id,
               professionalId: appt.professionalId,
               date: args.newDate,
               status: { in: ['PENDING', 'CONFIRMED'] },
@@ -474,15 +481,7 @@ export async function createAppointmentAdmin(args: {
     })
 
     if (!result.ok) {
-      const PT_BR: Record<string, string> = {
-        SLOT_TAKEN: 'Esse horário acabou de ser reservado.',
-        INVALID_SERVICE: 'Serviço não encontrado.',
-        INVALID_PROFESSIONAL: 'Profissional não encontrado.',
-        OUTSIDE_AVAILABILITY: 'Horário fora da disponibilidade.',
-        INVALID_PHONE: 'Telefone inválido — use formato (11) 98765-4321.',
-        NOT_FOUND: 'Não encontrado.',
-      }
-      return { ok: false, error: PT_BR[result.error] ?? result.error }
+      return { ok: false, error: BOOKING_ERROR_PT_BR[result.error] ?? result.error }
     }
 
     revalidatePath('/dashboard/agenda')
@@ -504,20 +503,25 @@ export async function getAdminSlots(args: {
   date: string
   excludeAppointmentId?: string
 }): Promise<{ ok: true; slots: string[] } | { ok: false; error: string }> {
-  const { barbershop } = await requireOnboarded()
+  try {
+    const { barbershop } = await requireOnboarded()
 
-  const result = await getAvailableSlots({
-    tenantId: barbershop.id,
-    serviceId: args.serviceId,
-    professionalId: args.professionalId,
-    date: args.date,
-    excludeAppointmentId: args.excludeAppointmentId,
-  })
+    const result = await getAvailableSlots({
+      tenantId: barbershop.id,
+      serviceId: args.serviceId,
+      professionalId: args.professionalId,
+      date: args.date,
+      excludeAppointmentId: args.excludeAppointmentId,
+    })
 
-  if (!result.ok) {
-    return { ok: false, error: 'Não foi possível carregar os horários.' }
+    if (!result.ok) {
+      return { ok: false, error: 'Não foi possível carregar os horários.' }
+    }
+
+    const profSlots = result.data.find(p => p.professionalId === args.professionalId)
+    return { ok: true, slots: profSlots?.slots ?? [] }
+  } catch (err) {
+    console.error('[getAdminSlots]', err)
+    return { ok: false, error: 'Erro ao carregar horários. Tente novamente.' }
   }
-
-  const profSlots = result.data.find(p => p.professionalId === args.professionalId)
-  return { ok: true, slots: profSlots?.slots ?? [] }
 }

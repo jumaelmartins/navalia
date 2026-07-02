@@ -1,8 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { computeSlots, overlaps, addMinutes } from './slots'
+import { computeSlots, overlaps, addMinutes, isCanonicalDate } from './slots'
 
 const bh = { start: '08:00', end: '18:00' }
 const avail = [{ start: '09:00', end: '17:00' }]
+
+describe('isCanonicalDate', () => {
+  it('accepts a valid ISO date', () => {
+    expect(isCanonicalDate('2026-07-06')).toBe(true)
+  })
+  it('rejects non-zero-padded month/day', () => {
+    expect(isCanonicalDate('2026-7-6')).toBe(false)
+  })
+  it('rejects an impossible calendar date', () => {
+    expect(isCanonicalDate('2026-02-30')).toBe(false)
+  })
+  it('rejects empty string', () => {
+    expect(isCanonicalDate('')).toBe(false)
+  })
+  it('rejects wrong format', () => {
+    expect(isCanonicalDate('06/07/2026')).toBe(false)
+  })
+})
 
 describe('overlaps', () => {
   it('detects newStart < existingEnd && newEnd > existingStart', () => {
