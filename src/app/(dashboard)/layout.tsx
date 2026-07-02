@@ -8,7 +8,7 @@ import { TrialBanner } from './_components/TrialBanner'
 
 // Routes that bypass the subscription gate so users can manage/reactivate
 // their plan without triggering a redirect loop.
-const GATE_EXEMPT_PATHS = ['/dashboard/configuracoes/assinatura']
+const GATE_EXEMPT_PATHS = ['/dashboard/configuracoes']
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { barbershop, user } = await requireOnboarded()
