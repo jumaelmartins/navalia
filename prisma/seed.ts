@@ -294,7 +294,7 @@ async function main() {
     { date: lastWeek1, startTime: '10:00', endTime: '10:25', status: 'COMPLETED', customerIdx: 1, professionalIdx: 1, serviceIdx: 1 },
     { date: lastWeek2, startTime: '11:00', endTime: '12:00', status: 'COMPLETED', customerIdx: 2, professionalIdx: 0, serviceIdx: 2 },
     { date: lastWeek3, startTime: '09:30', endTime: '10:00', status: 'COMPLETED', customerIdx: 3, professionalIdx: 1, serviceIdx: 0 },
-    { date: lastWeek4, startTime: '14:00', endTime: '14:25', status: 'COMPLETED', customerIdx: 4, professionalIdx: 0, serviceIdx: 3 },
+    { date: lastWeek4, startTime: '14:00', endTime: '14:15', status: 'COMPLETED', customerIdx: 4, professionalIdx: 0, serviceIdx: 3 },
     { date: lastWeek5, startTime: '15:00', endTime: '15:30', status: 'CANCELLED', customerIdx: 5, professionalIdx: 1, serviceIdx: 0 },
 
     // Yesterday — 2 COMPLETED, 1 NO_SHOW
