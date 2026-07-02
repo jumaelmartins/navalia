@@ -47,7 +47,7 @@ export async function upsertAvailabilityRules(
 
   try {
     await prisma.$transaction([
-      prisma.availabilityRule.deleteMany({ where: { professionalId } }),
+      prisma.availabilityRule.deleteMany({ where: { professionalId, barbershopId: barbershop.id } }),
       ...(validatedRules.length > 0
         ? [
             prisma.availabilityRule.createMany({
@@ -104,6 +104,7 @@ export async function createScheduleBlock(
         source: 'USER',
       },
     })
+    revalidatePath('/dashboard/agenda')
     return { ok: true, data: { id: block.id } }
   } catch (err) {
     console.error('[createScheduleBlock]', err)
@@ -127,6 +128,7 @@ export async function deleteScheduleBlock(blockId: string): Promise<ActionResult
 
   try {
     await prisma.scheduleBlock.delete({ where: { id: blockId } })
+    revalidatePath('/dashboard/agenda')
     return { ok: true }
   } catch (err) {
     console.error('[deleteScheduleBlock]', err)
