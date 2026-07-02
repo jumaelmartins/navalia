@@ -56,8 +56,6 @@ const ARG_LABELS: Record<string, string> = {
   startTime: 'Horário início',
   endTime: 'Horário fim',
   reason: 'Motivo',
-  appointmentId: 'ID do agendamento',
-  blockId: 'ID do bloqueio',
 }
 
 function ArgsTable({ args }: { args: unknown }) {

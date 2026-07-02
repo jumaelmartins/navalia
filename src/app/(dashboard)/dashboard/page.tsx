@@ -24,6 +24,7 @@ import { revalidatePath } from 'next/cache'
 
 async function refreshInsightsAction(barbershopId: string) {
   'use server'
+  await requireOnboarded()
   await bustInsightsCache(barbershopId)
   revalidatePath('/dashboard')
 }

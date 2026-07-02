@@ -277,7 +277,7 @@ model AiActionLog {
   toolName             String
   input                Json
   output               Json?
-  status               String // EXECUTED | PENDING_CONFIRMATION | CONFIRMED | REJECTED | ERROR
+  status               String // EXECUTED | PENDING_CONFIRMATION | PROCESSING | CONFIRMED | REJECTED | ERROR
   requiresConfirmation Boolean @default(false)
   confirmedAt          DateTime?
   userId               String?

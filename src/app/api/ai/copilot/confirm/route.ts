@@ -63,31 +63,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const { actionId, reject } = parsed.data
 
-  // 3. Load AiActionLog — tenant fence + status check
+  // 3. Load AiActionLog — tenant fence (→ 404) + capture toolName/input for later
   const log = await prisma.aiActionLog.findFirst({
-    where: {
-      id: actionId,
-      barbershopId: barbershop.id,
-    },
+    where: { id: actionId, barbershopId: barbershop.id },
   })
 
   if (!log) {
     return NextResponse.json({ error: 'Ação não encontrada.' }, { status: 404 })
   }
 
-  if (log.status !== 'PENDING_CONFIRMATION') {
-    return NextResponse.json(
-      { error: `Ação já processada (status atual: ${log.status}).` },
-      { status: 409 },
-    )
+  // 4. Atomic claim — prevents concurrent double-execution.
+  //    Transitions PENDING_CONFIRMATION → REJECTED (reject) or PROCESSING (confirm).
+  //    If count === 0 the row was already claimed by a concurrent request or was not pending.
+  const claim = await prisma.aiActionLog.updateMany({
+    where: { id: actionId, barbershopId: barbershop.id, status: 'PENDING_CONFIRMATION' },
+    data: { status: reject ? 'REJECTED' : 'PROCESSING' },
+  })
+
+  if (claim.count !== 1) {
+    return NextResponse.json({ error: 'Esta ação já foi processada.' }, { status: 409 })
   }
 
-  // 4. REJECT path
+  // 5. REJECT path
   if (reject) {
     await prisma.aiActionLog.update({
       where: { id: actionId },
       data: {
-        status: 'REJECTED',
         output: { rejectedBy: user.id } as Parameters<typeof prisma.aiActionLog.update>[0]['data']['output'],
       },
     })
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, status: 'REJECTED' })
   }
 
-  // 5. CONFIRM path — execute the stored sensitive action
+  // 6. CONFIRM path — execute the stored sensitive action
   const tools = buildCopilotTools({ id: barbershop.id, timezone: barbershop.timezone }, 'OWNER')
   const toolDef = tools.find(t => t.name === log.toolName && t.sensitive === true)
 
@@ -116,6 +117,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data: {
         status: 'ERROR',
         output: { error: `Ferramenta sensível "${log.toolName}" não encontrada.` } as Parameters<typeof prisma.aiActionLog.update>[0]['data']['output'],
+      },
+    })
+    await prisma.auditLog.create({
+      data: {
+        barbershopId: barbershop.id,
+        userId: user.id,
+        action: 'COPILOT_ACTION_FAILED',
+        entity: 'AiActionLog',
+        entityId: actionId,
+        payload: { toolName: log.toolName, error: `Ferramenta sensível "${log.toolName}" não encontrada.` },
       },
     })
     return NextResponse.json(
@@ -156,6 +167,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data: {
         status: 'ERROR',
         output: { error: execError } as Parameters<typeof prisma.aiActionLog.update>[0]['data']['output'],
+      },
+    })
+    await prisma.auditLog.create({
+      data: {
+        barbershopId: barbershop.id,
+        userId: user.id,
+        action: 'COPILOT_ACTION_FAILED',
+        entity: 'AiActionLog',
+        entityId: actionId,
+        payload: { toolName: log.toolName, error: execError },
       },
     })
     return NextResponse.json({ ok: false, error: `Erro ao executar ação: ${execError}` })
