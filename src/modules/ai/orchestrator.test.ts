@@ -116,6 +116,7 @@ function echoTool(): ToolDef {
 
 /** A tool that validates with Zod and rejects invalid input */
 function zodTool(): ToolDef {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod')
   return {
     name: 'zodTool',

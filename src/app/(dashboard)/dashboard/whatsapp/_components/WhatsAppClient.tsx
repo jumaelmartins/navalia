@@ -126,6 +126,7 @@ export function WhatsAppClient({
   // Auto-start polling if page loaded in CONNECTING state
   useEffect(() => {
     if (status === 'CONNECTING' && instanceId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       startPolling()
     }
     return stopPolling

@@ -1,0 +1,99 @@
+services:
+  # ── Application ──────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    env_file: .env.prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      evolution:
+        condition: service_started
+    networks:
+      - internal
+
+  # ── Reverse proxy + TLS (only service exposed to the internet) ───────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    networks:
+      - internal
+
+  # ── PostgreSQL 16 ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-navalia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB:-navalia}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-navalia} -d ${POSTGRES_DB:-navalia}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # NOT published — only reachable on the internal network
+    networks:
+      - internal
+
+  # ── Redis 7 ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    # NOT published
+    networks:
+      - internal
+
+  # ── Evolution API v2 (WhatsApp) ───────────────────────────────────────────
+  evolution:
+    image: evoapicloud/evolution-api:v2.2.3
+    restart: unless-stopped
+    environment:
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: >-
+        postgresql://${POSTGRES_USER:-navalia}:${POSTGRES_PASSWORD}@postgres:5432/evolution?schema=public
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/1
+      # Webhooks flow container→app on the internal Docker network.
+      # No public exposure needed for inbound Evolution webhooks.
+      WEBHOOK_GLOBAL_URL: http://app:3000/api/webhooks/evolution
+      WEBHOOK_GLOBAL_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    # NOT published — app reaches Evolution on the internal network
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

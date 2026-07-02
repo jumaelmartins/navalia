@@ -1,0 +1,7 @@
+# Navalia production Caddyfile
+# Caddy automatically provisions TLS for {$DOMAIN} via Let's Encrypt.
+# Requires a valid DNS A record pointing to this VPS.
+
+{$DOMAIN} {
+    reverse_proxy app:3000
+}

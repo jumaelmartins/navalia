@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useTransition } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { SendIcon, BotIcon, UserIcon, CheckIcon, XIcon, LoaderIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -299,9 +300,9 @@ export function CopilotClient({ role }: { role: Role }) {
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           Pergunte sobre agendamentos, faturamento, clientes e mais.{' '}
-          <a href="/dashboard/configuracoes/logs" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/dashboard/configuracoes/logs" className="underline underline-offset-2 hover:text-foreground">
             Ver historico de acoes
-          </a>
+          </Link>
         </p>
       </CardHeader>
 

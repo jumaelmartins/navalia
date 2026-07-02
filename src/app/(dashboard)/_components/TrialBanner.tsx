@@ -13,9 +13,11 @@ interface TrialBannerProps {
 export function TrialBanner({ trialEndsAt, priceCents }: TrialBannerProps) {
   const [loading, setLoading] = useState(false)
 
+  /* eslint-disable react-hooks/purity */
   const daysLeft = Math.ceil(
     (new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
   )
+  /* eslint-enable react-hooks/purity */
 
   // Gate already blocks when trial expires; don't render for 0 or negative
   if (daysLeft <= 0) return null

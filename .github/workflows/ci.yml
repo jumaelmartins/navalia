@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: Lint · Typecheck · Test · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        # Integration tests use describe.skipIf(!process.env.DATABASE_URL) and
+        # are automatically skipped here — only unit tests run in CI.
+        run: npm test
+
+      - name: Build
+        # NEXT_PUBLIC_* vars are inlined at build time; provide placeholders so
+        # the build succeeds without real infrastructure.
+        # Non-NEXT_PUBLIC env vars are read at runtime only (not baked in).
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          BETTER_AUTH_SECRET: ci-placeholder-secret-32-chars-pad
+          BETTER_AUTH_URL: http://localhost:3000
+          STRIPE_SECRET_KEY: sk_test_placeholder
+          STRIPE_WEBHOOK_SECRET: whsec_placeholder
+          STRIPE_PRICE_ID: price_placeholder
+          PLAN_PRICE_CENTS: "9900"
+          OPENAI_API_KEY: sk-placeholder
+          OPENAI_MODEL: gpt-4o-mini
+          EVOLUTION_URL: http://localhost:8080
+          EVOLUTION_API_KEY: placeholder
+          EVOLUTION_WEBHOOK_TOKEN: placeholder
+          EVOLUTION_WEBHOOK_URL: http://localhost:3000
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: npm run build
