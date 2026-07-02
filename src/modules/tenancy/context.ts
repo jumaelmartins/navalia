@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import type { Barbershop, User } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { hasAccess } from '@/modules/billing/gate'
 
 /**
  * Converte um nome de exibição em slug seguro para URL.
@@ -51,20 +52,34 @@ export async function requireMember(): Promise<TenantContext> {
 
 /**
  * Guard server-side: igual a requireMember, mas exige role OWNER.
- * Não-OWNER → redirect('/dashboard').
+ * Sem billing gate — usado apenas por ações de billing (checkout/portal)
+ * que DEVEM funcionar mesmo quando o acesso está bloqueado.
  */
-export async function requireOwner(): Promise<TenantContext> {
+export async function requireOwnerUngated(): Promise<TenantContext> {
   const ctx = await requireMember()
   if (ctx.user.role !== 'OWNER') redirect('/dashboard')
   return ctx
 }
 
 /**
+ * Guard server-side: igual a requireOwnerUngated, mas também exige acesso
+ * ativo à assinatura. Assinatura vencida → redirect('/dashboard/reativar').
+ */
+export async function requireOwner(): Promise<TenantContext> {
+  const ctx = await requireOwnerUngated()
+  if (!hasAccess(ctx.barbershop)) redirect('/dashboard/reativar')
+  return ctx
+}
+
+/**
  * Guard server-side: igual a requireMember, mas exige que o onboarding
- * já esteja completo. Onboarding incompleto → redirect('/dashboard/onboarding').
+ * já esteja completo E que a assinatura esteja ativa.
+ * Onboarding incompleto → redirect('/dashboard/onboarding').
+ * Assinatura vencida → redirect('/dashboard/reativar').
  */
 export async function requireOnboarded(): Promise<TenantContext> {
   const ctx = await requireMember()
   if (!ctx.barbershop.onboardingCompleted) redirect('/dashboard/onboarding')
+  if (!hasAccess(ctx.barbershop)) redirect('/dashboard/reativar')
   return ctx
 }

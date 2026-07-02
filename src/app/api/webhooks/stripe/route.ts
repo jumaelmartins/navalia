@@ -100,12 +100,31 @@ export async function POST(req: NextRequest) {
             typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
           if (!customerId) break
 
+          // Resolve the subscription id from the invoice (Stripe v22 structure)
+          // In v22, subscription is nested under invoice.parent.subscription_details.subscription
+          const rawSubId = invoice.parent?.subscription_details?.subscription ?? null
+          const invoiceSubId =
+            typeof rawSubId === 'string' ? rawSubId : (rawSubId as { id?: string } | null)?.id ?? null
+
           const newStatus = mapStripeEvent('invoice.paid')
           if (!newStatus) break // never null for this event type; guards typing
 
           const shop = await tx.barbershop.findUnique({ where: { stripeCustomerId: customerId } })
           if (!shop) {
             console.warn('[webhook/stripe] invoice.paid: shop not found for customer', customerId)
+            break
+          }
+
+          // I3: Only activate when invoice subscription matches the stored sub.
+          // An old invoice arriving after cancellation must NOT resurrect the shop.
+          if (invoiceSubId && shop.stripeSubscriptionId && invoiceSubId !== shop.stripeSubscriptionId) {
+            console.warn(
+              '[webhook/stripe] invoice.paid: subscription mismatch — expected',
+              shop.stripeSubscriptionId,
+              'got',
+              invoiceSubId,
+              '— no-op',
+            )
             break
           }
 
@@ -119,7 +138,7 @@ export async function POST(req: NextRequest) {
               action: 'SUBSCRIPTION_invoice.paid',
               entity: 'Barbershop',
               entityId: shop.id,
-              payload: { eventId: event.id, customerId, newStatus },
+              payload: { eventId: event.id, customerId, invoiceSubId, newStatus },
             },
           })
           break
@@ -228,9 +247,19 @@ export async function POST(req: NextRequest) {
       }
     })
   } catch (err) {
-    // P2002 = unique constraint on eventId → already processed → 200 idempotent
+    // I4: Discriminate P2002 by constraint target.
+    // Only treat it as a duplicate-event (idempotent 200) when the unique
+    // violation is on the WebhookEvent.eventId constraint.
+    // Any other P2002 (e.g. stripeCustomerId collision) → 500 so Stripe retries.
     if ((err as { code?: string }).code === 'P2002') {
-      return new Response('Already processed', { status: 200 })
+      const target = (err as { meta?: { target?: string | string[] } }).meta?.target
+      const isEventIdViolation =
+        target === 'eventId' ||
+        (Array.isArray(target) && target.some(t => t === 'eventId' || t.includes('eventId'))) ||
+        (typeof target === 'string' && target.includes('eventId'))
+      if (isEventIdViolation) {
+        return new Response('Already processed', { status: 200 })
+      }
     }
     // Any other error (DB unreachable, mutation rejected, etc.) → 500 so that
     // Stripe retries.  The transaction was rolled back, freeing the idempotency

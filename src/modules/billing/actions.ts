@@ -1,6 +1,6 @@
 'use server'
 
-import { requireOwner } from '@/modules/tenancy/context'
+import { requireOwnerUngated } from '@/modules/tenancy/context'
 import { prisma } from '@/lib/prisma'
 import { getStripe } from './stripe'
 
@@ -35,7 +35,7 @@ const ASSINATURA_URL = () => `${appUrl()}/dashboard/configuracoes/assinatura`
  */
 export async function createCheckoutSession(): Promise<ActionResult<{ url: string }>> {
   try {
-    const { barbershop } = await requireOwner()
+    const { barbershop } = await requireOwnerUngated()
 
     const priceId = process.env.STRIPE_PRICE_ID ?? ''
     if (!priceId) {
@@ -99,7 +99,7 @@ export async function createCheckoutSession(): Promise<ActionResult<{ url: strin
  */
 export async function createPortalSession(): Promise<ActionResult<{ url: string }>> {
   try {
-    const { barbershop } = await requireOwner()
+    const { barbershop } = await requireOwnerUngated()
 
     if (!barbershop.stripeCustomerId) {
       return { ok: false, error: 'Nenhuma assinatura encontrada.' }
