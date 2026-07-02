@@ -25,6 +25,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
           >
             Serviços
           </Link>
+          <Link
+            href="/dashboard/profissionais"
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Profissionais
+          </Link>
         </div>
       </nav>
       {children}
