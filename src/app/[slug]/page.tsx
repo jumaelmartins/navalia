@@ -3,6 +3,7 @@ import { MapPin, Phone, Clock, Scissors } from 'lucide-react'
 import { getPublicShop } from '@/modules/booking/public-actions'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
 import { BookingSection } from './_components/BookingSection'
+import { ChatWidget } from './_components/ChatWidget'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -171,6 +172,9 @@ export default async function PublicShopPage({ params }: Props) {
           <BookingSection shop={shop} />
         </div>
       </section>
+
+      {/* ── AI chat widget (fixed floating) ───────────────────────────────────── */}
+      <ChatWidget slug={shop.slug} shopName={shop.name} />
     </main>
   )
 }
