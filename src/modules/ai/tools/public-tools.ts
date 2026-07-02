@@ -6,6 +6,7 @@ import {
   createAppointment as engineCreateAppointment,
   cancelAppointment as engineCancelAppointment,
 } from '@/modules/booking/create-appointment'
+import { resolveProfessionalByName } from './resolve-professional'
 import type { ToolDef, ToolCtx } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -180,27 +181,9 @@ export function buildPublicTools(): ToolDef[] {
           let professionalId: string | null = null
 
           if (professionalName) {
-            const matches = await prisma.professional.findMany({
-              where: {
-                barbershopId: ctx.tenantId,
-                isActive: true,
-                name: { contains: professionalName, mode: 'insensitive' },
-              },
-              select: { id: true, name: true },
-            })
-
-            if (matches.length === 0) {
-              return {
-                error: `Profissional "${professionalName}" não encontrado. Tente outro nome ou omita para ver todos.`,
-              }
-            }
-            if (matches.length > 1) {
-              const names = matches.map(p => p.name).join(', ')
-              return {
-                error: `Nome ambíguo — profissionais encontrados: ${names}. Por favor, seja mais específico.`,
-              }
-            }
-            professionalId = matches[0].id
+            const resolved = await resolveProfessionalByName(ctx.tenantId, professionalName)
+            if ('error' in resolved) return { error: resolved.error }
+            professionalId = resolved.id
           }
 
           const result = await getAvailableSlots({

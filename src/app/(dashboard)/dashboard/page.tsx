@@ -5,14 +5,81 @@ import {
   AlertTriangleIcon,
   ScissorsIcon,
   ClockIcon,
+  SparklesIcon,
+  RefreshCwIcon,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { requireOnboarded } from '@/modules/tenancy/context'
 import { getDashboardKpis } from '@/modules/insights/queries'
+import { getInsightsSummary, bustInsightsCache } from '@/modules/insights/narrate'
 import { prisma } from '@/lib/prisma'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
 import { cn } from '@/lib/utils'
+import { revalidatePath } from 'next/cache'
+
+// ---------------------------------------------------------------------------
+// Server action — bust insights cache
+// ---------------------------------------------------------------------------
+
+async function refreshInsightsAction(barbershopId: string) {
+  'use server'
+  await bustInsightsCache(barbershopId)
+  revalidatePath('/dashboard')
+}
+
+// ---------------------------------------------------------------------------
+// Insights card
+// ---------------------------------------------------------------------------
+
+async function InsightsCard({ tenantId, refreshAction }: {
+  tenantId: string
+  refreshAction: () => Promise<void>
+}) {
+  const summary = await getInsightsSummary(tenantId)
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <SparklesIcon className="size-4 text-muted-foreground" />
+            <CardTitle className="text-base">Resumo IA</CardTitle>
+          </div>
+          <form action={refreshAction}>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <RefreshCwIcon className="size-3" />
+              Atualizar
+            </button>
+          </form>
+        </div>
+        <CardDescription>Analise gerada pela IA com base nos dados reais</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {summary.ok ? (
+          <div className="space-y-2">
+            <p className="text-sm text-foreground leading-relaxed">{summary.data.text}</p>
+            <p className="text-xs text-muted-foreground/70">
+              Gerado em {new Date(summary.data.computedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <SparklesIcon className="mb-2 size-8 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">
+              {summary.error.includes('OPENAI_API_KEY')
+                ? 'Configure OPENAI_API_KEY para ativar o resumo de IA.'
+                : 'Nao foi possivel gerar o resumo agora.'}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Status labels
@@ -167,6 +234,9 @@ function TopServicesList({
 export default async function DashboardPage() {
   const { barbershop } = await requireOnboarded()
 
+  // Bind the server action to this tenant
+  const boundRefreshAction = refreshInsightsAction.bind(null, barbershop.id)
+
   // Current date/time in shop timezone for upcoming appointments
   const shopToday = new Intl.DateTimeFormat('en-CA', {
     timeZone: barbershop.timezone,
@@ -299,6 +369,9 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI insights card */}
+      <InsightsCard tenantId={barbershop.id} refreshAction={boundRefreshAction} />
     </main>
   )
 }
