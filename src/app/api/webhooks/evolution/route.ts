@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 
 // ---------------------------------------------------------------------------
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
       case 'messages.upsert':
       case 'MESSAGES_UPSERT': {
         // Idempotency insert — generate a stable event id from the first
-        // message key id if available; fall back to a timestamp-based id.
+        // message key id if available; fall back to a hash-based id.
         const messages = Array.isArray(data.messages) ? data.messages : []
         const firstMsgId =
           typeof (messages[0] as Record<string, unknown> | undefined)?.key === 'object'
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         const eventId =
           typeof firstMsgId === 'string'
             ? `msg_${firstMsgId}`
-            : `msg_${barbershop.id}_${Date.now()}`
+            : `msg_${createHash('sha256').update(JSON.stringify(data)).digest('hex').slice(0, 32)}`
 
         try {
           await prisma.webhookEvent.create({

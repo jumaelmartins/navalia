@@ -72,10 +72,22 @@ export async function connectWhatsApp(): Promise<
       })
     })
   } else {
-    // Instance already exists — just ensure status is CONNECTING
-    await prisma.barbershop.update({
-      where: { id: barbershop.id },
-      data: { whatsappStatus: 'CONNECTING' },
+    // Instance already exists — ensure status is CONNECTING and log reconnect attempt
+    await prisma.$transaction(async (tx) => {
+      await tx.barbershop.update({
+        where: { id: barbershop.id },
+        data: { whatsappStatus: 'CONNECTING' },
+      })
+      await tx.auditLog.create({
+        data: {
+          barbershopId: barbershop.id,
+          userId: user.id,
+          action: 'WHATSAPP_RECONNECT_INITIATED',
+          entity: 'Barbershop',
+          entityId: barbershop.id,
+          payload: { instanceName: name },
+        },
+      })
     })
   }
 
@@ -147,7 +159,7 @@ export async function disconnectWhatsApp(): Promise<ActionResult> {
 
   const logoutRes = await evolution.logout(name)
   // 404 (already disconnected) is acceptable — treat as success
-  if (!logoutRes.ok && !logoutRes.error.includes('404')) {
+  if (!logoutRes.ok && logoutRes.statusCode !== 404) {
     return { ok: false, error: `Erro ao desconectar: ${logoutRes.error}` }
   }
 
@@ -187,7 +199,7 @@ export async function resetWhatsApp(): Promise<ActionResult> {
 
   // Attempt to delete — if already gone, continue
   const deleteRes = await evolution.deleteInstance(name)
-  if (!deleteRes.ok && !deleteRes.error.includes('404')) {
+  if (!deleteRes.ok && deleteRes.statusCode !== 404) {
     return { ok: false, error: `Erro ao remover instância: ${deleteRes.error}` }
   }
 

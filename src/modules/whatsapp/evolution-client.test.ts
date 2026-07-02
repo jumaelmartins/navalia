@@ -163,7 +163,7 @@ describe('evolution.createInstance', () => {
     expect(body.webhook.headers['X-Navalia-Token']).toBe('test-webhook-token')
   })
 
-  it('returns ok: false on non-2xx response', async () => {
+  it('returns ok: false on non-2xx response with statusCode', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 422,
@@ -172,7 +172,10 @@ describe('evolution.createInstance', () => {
 
     const result = await evolution.createInstance('nav_abc', 'http://example.com')
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toContain('422')
+    if (!result.ok) {
+      expect(result.error).toContain('422')
+      expect(result.statusCode).toBe(422)
+    }
   })
 
   it('returns ok: false on network failure', async () => {
@@ -181,6 +184,16 @@ describe('evolution.createInstance', () => {
     const result = await evolution.createInstance('nav_abc', 'http://example.com')
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toContain('ECONNREFUSED')
+  })
+
+  it('returns timeout error on fetch AbortError', async () => {
+    const abortError = new Error('The operation was aborted')
+    abortError.name = 'AbortError'
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abortError))
+
+    const result = await evolution.createInstance('nav_abc', 'http://example.com')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('Evolution API timeout')
   })
 })
 

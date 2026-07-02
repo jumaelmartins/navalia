@@ -1,3 +1,5 @@
+import 'server-only'
+
 /**
  * evolution-client.ts
  *
@@ -22,7 +24,9 @@
  *   The route verifies this header against EVOLUTION_WEBHOOK_TOKEN.
  */
 
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string }
+export type Result<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; statusCode?: number }
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -82,16 +86,25 @@ export function buildWebhookConfig(webhookUrl: string): object {
   }
 }
 
-/** Generic fetch wrapper — returns Result<T>. */
+/** Generic fetch wrapper — returns Result<T>. Includes 12s timeout. */
 async function apiFetch<T>(
   url: string,
   options: RequestInit,
 ): Promise<Result<T>> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 12000)
+
   let res: Response
   try {
-    res = await fetch(url, options)
+    res = await fetch(url, { ...options, signal: controller.signal })
   } catch (err) {
-    return { ok: false, error: `Network error: ${(err as Error).message}` }
+    const error = err as Error
+    if (error.name === 'AbortError') {
+      return { ok: false, error: 'Evolution API timeout' }
+    }
+    return { ok: false, error: `Network error: ${error.message}` }
+  } finally {
+    clearTimeout(timeoutId)
   }
 
   let body: unknown
@@ -106,7 +119,7 @@ async function apiFetch<T>(
       typeof body === 'object' && body !== null && 'response' in body
         ? JSON.stringify((body as { response: unknown }).response)
         : String(res.status)
-    return { ok: false, error: `Evolution API error ${res.status}: ${msg}` }
+    return { ok: false, error: `Evolution API error ${res.status}: ${msg}`, statusCode: res.status }
   }
 
   return { ok: true, data: body as T }
