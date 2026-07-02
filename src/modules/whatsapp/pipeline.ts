@@ -31,6 +31,28 @@ const HUMAN_HANDOFF_SUFFIX =
   '\nUm atendente da barbearia vai continuar a conversa por aqui.'
 
 // ---------------------------------------------------------------------------
+// extractUpsertMessages — normalizes the two MESSAGES_UPSERT data shapes
+//
+// Evolution v2.2.x delivers a batch:   data.messages = [{ key, message }, ...]
+// Evolution v2.3.x delivers ONE message as the data object itself:
+//                                      data = { key, message, ... }
+// ---------------------------------------------------------------------------
+
+export function extractUpsertMessages(
+  data: Record<string, unknown>,
+): Record<string, unknown>[] {
+  if (Array.isArray(data.messages)) {
+    return data.messages.filter(
+      (m): m is Record<string, unknown> => typeof m === 'object' && m !== null,
+    )
+  }
+  if (typeof data.key === 'object' && data.key !== null) {
+    return [data]
+  }
+  return []
+}
+
+// ---------------------------------------------------------------------------
 // parseMessagesUpsert — pure extractor for MESSAGES_UPSERT payloads
 //
 // Returns null for:

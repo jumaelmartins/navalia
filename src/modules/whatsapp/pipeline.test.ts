@@ -639,3 +639,27 @@ describe('flushToAI: conversation state flipped to TRANSFERRED_TO_HUMAN during w
     expect(mockRunAssistant).not.toHaveBeenCalled()
   })
 })
+
+describe('extractUpsertMessages (v2.2 batch vs v2.3 single-object shapes)', async () => {
+  const { extractUpsertMessages } = await import('./pipeline')
+
+  it('extracts batch array (Evolution v2.2.x shape)', () => {
+    const data = { messages: [{ key: { id: 'a' } }, { key: { id: 'b' } }] }
+    expect(extractUpsertMessages(data)).toHaveLength(2)
+  })
+
+  it('wraps single-object data (Evolution v2.3.x shape)', () => {
+    const data = {
+      key: { remoteJid: '557199@s.whatsapp.net', fromMe: false, id: 'X1' },
+      message: { conversation: 'oi' },
+    }
+    const out = extractUpsertMessages(data)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toBe(data)
+  })
+
+  it('returns empty for junk data', () => {
+    expect(extractUpsertMessages({})).toHaveLength(0)
+    expect(extractUpsertMessages({ messages: 'nope' })).toHaveLength(0)
+  })
+})

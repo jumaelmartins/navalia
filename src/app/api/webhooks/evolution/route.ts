@@ -1,7 +1,11 @@
 import type { NextRequest } from 'next/server'
 import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { handleInboundMessage, parseMessagesUpsert } from '@/modules/whatsapp/pipeline'
+import {
+  extractUpsertMessages,
+  handleInboundMessage,
+  parseMessagesUpsert,
+} from '@/modules/whatsapp/pipeline'
 
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/evolution
@@ -103,9 +107,9 @@ export async function POST(req: NextRequest) {
       // ── messages.upsert ──────────────────────────────────────────────────
       case 'messages.upsert':
       case 'MESSAGES_UPSERT': {
-        // M6: Evolution may batch multiple messages in one MESSAGES_UPSERT payload.
-        // Iterate every message in data.messages with per-key.id idempotency.
-        const messages = Array.isArray(data.messages) ? data.messages : []
+        // M6: Evolution v2.2.x batches messages in data.messages[]; v2.3.x
+        // delivers a single message as the data object itself. Normalize.
+        const messages = extractUpsertMessages(data)
 
         for (const msg of messages) {
           const msgRecord = msg as Record<string, unknown>
