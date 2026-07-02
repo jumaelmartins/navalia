@@ -22,5 +22,7 @@ export type BookingError =
   | 'INVALID_SERVICE'
   | 'INVALID_PROFESSIONAL'
   | 'OUTSIDE_AVAILABILITY'
+  | 'INVALID_PHONE'
+  | 'NOT_FOUND'
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: BookingError }

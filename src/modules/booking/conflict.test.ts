@@ -167,4 +167,114 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe('OUTSIDE_AVAILABILITY')
   })
+
+  it('(h) past-today booking → OUTSIDE_AVAILABILITY', async () => {
+    // Deterministic strategy: compute a slot on the 15-min grid that is
+    // 60+ minutes in the past (shop timezone America/Bahia).
+    // Skip window: before 10:00 AM shop time (no room for a 60-min-past slot
+    // inside the 09:00 rule) or after 16:30 shop time (30-min duration would
+    // exceed the 17:00 rule end).
+    // NOTE: a narrow ~30-min skip window around 10:00 is the only flake risk.
+    const shopTz = 'America/Bahia'
+
+    const todayInShop = new Intl.DateTimeFormat('en-CA', {
+      timeZone: shopTz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+
+    const timeParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: shopTz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date())
+    const rawH = timeParts.find(p => p.type === 'hour')?.value ?? '00'
+    const nowH = rawH === '24' ? 0 : parseInt(rawH, 10)
+    const nowM = parseInt(timeParts.find(p => p.type === 'minute')?.value ?? '00', 10)
+    const nowMinutes = nowH * 60 + nowM
+
+    // Past slot on the 15-min slot grid, at least 60 minutes ago
+    const pastMinutes = Math.floor((nowMinutes - 60) / 15) * 15
+
+    const [y, mo, d] = todayInShop.split('-').map(Number)
+    const weekday = new Date(Date.UTC(y, mo - 1, d)).getUTCDay()
+
+    // Skip conditions (deterministic):
+    //  - Sunday (weekday 0): shop closed, no businessHours entry
+    //  - before 10:00 shop time: 60min back lands before 09:00 rule start
+    //  - pastMinutes > 16:30: 30-min duration would breach 17:00 rule end
+    if (weekday === 0 || nowMinutes < 10 * 60 || pastMinutes > 16 * 60 + 30) {
+      console.log(
+        `[SKIP] past-today test: weekday=${weekday} nowMin=${nowMinutes} pastMin=${pastMinutes}`,
+      )
+      return
+    }
+
+    const pastHH = String(Math.floor(pastMinutes / 60)).padStart(2, '0')
+    const pastMM = String(pastMinutes % 60).padStart(2, '0')
+    const pastSlot = `${pastHH}:${pastMM}`
+
+    // Seed availability rule for today's weekday so the slot would be valid
+    // absent the minStart cutoff (AvailabilityRule has no unique-per-weekday
+    // constraint so no collision risk with the Monday rule from beforeAll).
+    const todayRule = await prisma.availabilityRule.create({
+      data: { barbershopId, professionalId, weekday, startTime: '09:00', endTime: '17:00' },
+    })
+
+    try {
+      const result = await createAppointment({
+        tenantId: barbershopId,
+        serviceId,
+        professionalId,
+        date: todayInShop,
+        startTime: pastSlot,
+        customer: { name: 'Past Test', phone: '11777777777' },
+        source: 'ADMIN',
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toBe('OUTSIDE_AVAILABILITY')
+    } finally {
+      await prisma.availabilityRule.delete({ where: { id: todayRule.id } })
+    }
+  })
+
+  it('(i) double-cancel → both ok, exactly ONE APPOINTMENT_CANCELLED audit row', async () => {
+    const bookResult = await createAppointment(base('14:00'))
+    expect(bookResult.ok).toBe(true)
+    if (!bookResult.ok) return
+
+    const apptId = bookResult.data.appointmentId
+
+    const cancel1 = await cancelAppointment({
+      tenantId: barbershopId,
+      appointmentId: apptId,
+      by: 'test-runner',
+    })
+    expect(cancel1.ok).toBe(true)
+
+    // Second cancel on an already-CANCELLED appointment → idempotent ok
+    const cancel2 = await cancelAppointment({
+      tenantId: barbershopId,
+      appointmentId: apptId,
+      by: 'test-runner',
+    })
+    expect(cancel2.ok).toBe(true)
+
+    // Atomic updateMany ensures the audit log is written exactly once
+    const auditRows = await prisma.auditLog.findMany({
+      where: { barbershopId, entityId: apptId, action: 'APPOINTMENT_CANCELLED' },
+    })
+    expect(auditRows).toHaveLength(1)
+  })
+
+  it('(j) phone "123" → INVALID_PHONE', async () => {
+    const result = await createAppointment({
+      ...base('15:00'),
+      customer: { name: 'Bad Phone', phone: '123' },
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('INVALID_PHONE')
+  })
 })

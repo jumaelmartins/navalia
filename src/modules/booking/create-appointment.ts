@@ -50,17 +50,37 @@ function roundUpTo5Min(hhmm: string): string {
 }
 
 /**
+ * Returns the earliest valid startTime (rounded-up-5min from now) when date
+ * is today in the shop's timezone, or undefined for future/past dates.
+ * Shared by getAvailableSlots and the createAppointment transaction.
+ */
+function computeMinStart(date: string, timezone: string): string | undefined {
+  const shopDate = shopLocalDateString(timezone)
+  if (date !== shopDate) return undefined
+  return roundUpTo5Min(shopLocalTimeHHmm(timezone))
+}
+
+/**
  * Normalises a phone to E.164-like digits.
  * BR heuristic: 10–11 raw digits → prefix '55'.
+ * Returns null when fewer than 10 digits remain after stripping non-digits.
  */
-function normalizePhone(phone: string): string {
+function normalizePhone(phone: string): string | null {
   const digits = phone.replace(/\D/g, '')
+  if (digits.length < 10) return null
   if (digits.length === 10 || digits.length === 11) return '55' + digits
   return digits
 }
 
-function isSerializationError(err: unknown): boolean {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034'
+/** Returns true for errors that warrant a single full-transaction retry. */
+function isRetryableError(err: unknown): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false
+  // P2034: serialization / snapshot-isolation failure
+  if (err.code === 'P2034') return true
+  // P2002: unique constraint race — two concurrent new-customer upserts for the
+  //         same (barbershopId, phone) pair; retry takes the update path.
+  if (err.code === 'P2002') return true
+  return false
 }
 
 type BizHoursMap = Record<string, { start: string; end: string } | null>
@@ -108,11 +128,7 @@ export async function getAvailableSlots(args: {
   const bh = (shop.businessHours as BizHoursMap)[String(weekday)] ?? null
 
   // 5. minStart only when the date is today in the shop's timezone
-  const shopDate = shopLocalDateString(shop.timezone)
-  let minStart: string | undefined
-  if (args.date === shopDate) {
-    minStart = roundUpTo5Min(shopLocalTimeHHmm(shop.timezone))
-  }
+  const minStart = computeMinStart(args.date, shop.timezone)
 
   // 6. Per-professional parallel fetch + slot computation
   const data = await Promise.all(
@@ -172,7 +188,9 @@ export async function createAppointment(args: {
     serviceName: string
   }>
 > {
+  // Fix 3: Validate phone before entering the transaction
   const phone = normalizePhone(args.customer.phone)
+  if (phone === null) return { ok: false, error: 'INVALID_PHONE' }
 
   const runTx = async () =>
     prisma.$transaction(
@@ -199,15 +217,20 @@ export async function createAppointment(args: {
           select: { name: true },
         })
 
-        // --- 3. Shop business hours ---
+        // --- 3. Shop business hours + timezone ---
         const shop = await tx.barbershop.findUnique({
           where: { id: args.tenantId },
-          select: { businessHours: true },
+          select: { businessHours: true, timezone: true },
         })
         if (!shop) return { ok: false as const, error: 'INVALID_SERVICE' as const }
 
         const weekday = dateToWeekday(args.date)
         const bh = (shop.businessHours as BizHoursMap)[String(weekday)] ?? null
+
+        // Fix 1: Enforce minStart inside the transaction so AI/WhatsApp channels
+        // cannot book a past-today slot. computeMinStart is deterministic for a
+        // given clock instant; calling it inside the tx is fine.
+        const minStart = computeMinStart(args.date, shop.timezone)
 
         // --- 4. Fresh availability inside the transaction ---
         const [rules, blocks, existingAppts] = await Promise.all([
@@ -234,12 +257,14 @@ export async function createAppointment(args: {
         const apptsInput = existingAppts.map(a => ({ start: a.startTime, end: a.endTime }))
 
         // Structural check (blocks only, no appointments) → OUTSIDE_AVAILABILITY
+        // minStart is applied here so past-today slots are caught immediately.
         const slotsNoAppts = computeSlots({
           businessHours: bh,
           availabilityRules: rulesInput,
           blocks: blocksInput,
           appointments: [],
           durationMin: service.durationMin,
+          minStart,
         })
         if (!slotsNoAppts.includes(args.startTime)) {
           return { ok: false as const, error: 'OUTSIDE_AVAILABILITY' as const }
@@ -252,6 +277,7 @@ export async function createAppointment(args: {
           blocks: blocksInput,
           appointments: apptsInput,
           durationMin: service.durationMin,
+          minStart,
         })
         if (!slotsWithAppts.includes(args.startTime)) {
           return { ok: false as const, error: 'SLOT_TAKEN' as const }
@@ -318,8 +344,9 @@ export async function createAppointment(args: {
   try {
     return await runTx()
   } catch (err) {
-    if (isSerializationError(err)) {
-      // One retry on PostgreSQL serialization failure
+    if (isRetryableError(err)) {
+      // One retry: covers both PostgreSQL serialization failures (P2034) and
+      // concurrent new-customer unique-constraint races (P2002).
       return await runTx()
     }
     throw err
@@ -335,23 +362,20 @@ export async function cancelAppointment(args: {
   appointmentId: string
   by: string
 }): Promise<Result<Record<string, never>>> {
-  const appointment = await prisma.appointment.findFirst({
-    where: { id: args.appointmentId, barbershopId: args.tenantId },
-    select: { id: true, status: true },
+  // Fix 4: Atomic cancel — single updateMany avoids the find-then-update race
+  // where two concurrent cancels could both read status=CONFIRMED and both write.
+  const { count } = await prisma.appointment.updateMany({
+    where: {
+      id: args.appointmentId,
+      barbershopId: args.tenantId,
+      status: { not: 'CANCELLED' },
+    },
+    data: { status: 'CANCELLED', cancelledAt: new Date() },
   })
 
-  // Not found → treat as already effectively cancelled (idempotent)
-  if (!appointment) return { ok: true, data: {} as Record<string, never> }
-
-  // Already cancelled → idempotent ok
-  if (appointment.status === 'CANCELLED') return { ok: true, data: {} as Record<string, never> }
-
-  await prisma.$transaction(async tx => {
-    await tx.appointment.update({
-      where: { id: args.appointmentId },
-      data: { status: 'CANCELLED', cancelledAt: new Date() },
-    })
-    await tx.auditLog.create({
+  if (count === 1) {
+    // Exactly one row updated → write audit log and return success.
+    await prisma.auditLog.create({
       data: {
         barbershopId: args.tenantId,
         action: 'APPOINTMENT_CANCELLED',
@@ -360,7 +384,20 @@ export async function cancelAppointment(args: {
         payload: { by: args.by },
       },
     })
+    return { ok: true, data: {} as Record<string, never> }
+  }
+
+  // count === 0: either already cancelled (idempotent) or appointment not found.
+  const existing = await prisma.appointment.findFirst({
+    where: { id: args.appointmentId, barbershopId: args.tenantId },
+    select: { id: true },
   })
 
-  return { ok: true, data: {} as Record<string, never> }
+  if (existing) {
+    // Already cancelled → idempotent success; no additional audit log.
+    return { ok: true, data: {} as Record<string, never> }
+  }
+
+  // Appointment does not belong to this tenant or does not exist.
+  return { ok: false, error: 'NOT_FOUND' }
 }
