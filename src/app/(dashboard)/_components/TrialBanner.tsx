@@ -40,7 +40,7 @@ export function TrialBanner({ trialEndsAt, priceCents }: TrialBannerProps) {
   const priceLabel = formatCentsToBRL(priceCents)
 
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+    <div className="flex items-center justify-between gap-4 border-b border-status-no-show/30 bg-status-no-show/10 px-4 py-2.5 text-sm text-foreground">
       <span className="font-medium">
         Seu teste termina em{' '}
         <strong>
@@ -51,7 +51,7 @@ export function TrialBanner({ trialEndsAt, priceCents }: TrialBannerProps) {
       <button
         onClick={handleSubscribe}
         disabled={loading}
-        className="shrink-0 rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+        className="shrink-0 rounded-md bg-[var(--status-no-show)] px-3 py-1 text-xs font-semibold text-[var(--status-no-show-fg)] transition-colors hover:opacity-90 disabled:opacity-60"
       >
         {loading ? 'Aguarde…' : `Assinar por ${priceLabel}/mês`}
       </button>

@@ -36,10 +36,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Desktop fixed sidebar */}
-      <DesktopSidebar shopName={barbershop.name} userName={user.name} />
+      <DesktopSidebar shopName={barbershop.name} userName={user.name} userRole={user.role} />
 
       {/* Mobile hamburger + slide-in panel */}
-      <MobileSidebar shopName={barbershop.name} userName={user.name} />
+      <MobileSidebar shopName={barbershop.name} userName={user.name} userRole={user.role} />
 
       {/* Page content — offset by sidebar on md+ */}
       <div className="md:pl-60">

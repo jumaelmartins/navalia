@@ -70,11 +70,11 @@ function ArgsTable({ args }: { args: unknown }) {
     <table className="mt-2 w-full text-xs border-collapse">
       <tbody>
         {entries.map(([k, v]) => (
-          <tr key={k} className="border-b border-amber-200/60 last:border-0">
-            <td className="py-1 pr-3 font-medium text-amber-900/70 w-32">
+          <tr key={k} className="border-b border-border last:border-0">
+            <td className="py-1 pr-3 font-medium text-muted-foreground w-32">
               {ARG_LABELS[k] ?? k}
             </td>
-            <td className="py-1 text-amber-900">{String(v)}</td>
+            <td className="py-1 text-foreground">{String(v)}</td>
           </tr>
         ))}
       </tbody>
@@ -100,12 +100,12 @@ function PendingActionCard({
   const label = TOOL_LABELS[action.toolName] ?? action.toolName
 
   return (
-    <div className="rounded-lg border-2 border-amber-400 bg-amber-50 p-4 shadow-sm">
+    <div className="rounded-lg border-2 border-status-no-show/50 bg-status-no-show/10 p-4 shadow-sm">
       <div className="flex items-start gap-2 mb-2">
-        <BotIcon className="size-4 text-amber-600 mt-0.5 shrink-0" />
+        <BotIcon className="size-4 text-[var(--status-no-show)] mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-amber-900">{label} — confirmacao necessaria</p>
-          <p className="mt-1 text-xs text-amber-800">{action.summary}</p>
+          <p className="text-sm font-semibold text-foreground">{label} — confirmação necessária</p>
+          <p className="mt-1 text-xs text-muted-foreground">{action.summary}</p>
           <ArgsTable args={action.args} />
         </div>
       </div>
@@ -114,7 +114,7 @@ function PendingActionCard({
           size="sm"
           disabled={disabled}
           onClick={onConfirm}
-          className="bg-amber-600 hover:bg-amber-700 text-white h-8 gap-1.5"
+          className="bg-[var(--status-no-show)] text-[var(--status-no-show-fg)] hover:opacity-90 h-8 gap-1.5"
         >
           <CheckIcon className="size-3.5" />
           Confirmar
@@ -124,7 +124,7 @@ function PendingActionCard({
           variant="outline"
           disabled={disabled}
           onClick={onReject}
-          className="h-8 gap-1.5 border-amber-400 text-amber-800 hover:bg-amber-100"
+          className="h-8 gap-1.5 border-status-no-show/50 text-foreground hover:bg-status-no-show/10"
         >
           <XIcon className="size-3.5" />
           Rejeitar
@@ -265,7 +265,7 @@ export function CopilotClient({ role }: { role: Role }) {
         const data = await res.json() as { ok: boolean; error?: string; status?: string }
 
         if (!res.ok || !data.ok) {
-          toast.error(data.error ?? 'Erro ao processar confirmacao.')
+          toast.error(data.error ?? 'Erro ao processar confirmação.')
           return
         }
 
@@ -274,17 +274,17 @@ export function CopilotClient({ role }: { role: Role }) {
         const followUp: Message = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: reject ? 'Acao rejeitada.' : 'Feito! A acao foi executada com sucesso.',
+          content: reject ? 'Ação rejeitada.' : 'Feito! A ação foi executada com sucesso.',
         }
         setMessages(prev => [...prev, followUp])
 
         if (!reject) {
-          toast.success('Acao confirmada e executada.')
+          toast.success('Ação confirmada e executada.')
         } else {
-          toast.info('Acao rejeitada.')
+          toast.info('Ação rejeitada.')
         }
       } catch {
-        toast.error('Falha ao processar confirmacao.')
+        toast.error('Falha ao processar confirmação.')
       }
     })
   }
@@ -301,7 +301,7 @@ export function CopilotClient({ role }: { role: Role }) {
         <p className="text-xs text-muted-foreground mt-0.5">
           Pergunte sobre agendamentos, faturamento, clientes e mais.{' '}
           <Link href="/dashboard/configuracoes/logs" className="underline underline-offset-2 hover:text-foreground">
-            Ver historico de acoes
+            Ver histórico de ações
           </Link>
         </p>
       </CardHeader>
@@ -314,7 +314,7 @@ export function CopilotClient({ role }: { role: Role }) {
             <div>
               <p className="text-sm font-medium text-muted-foreground">Como posso ajudar?</p>
               <p className="text-xs text-muted-foreground/70 mt-1">
-                Pergunte sobre a barbearia ou escolha uma sugestao abaixo.
+                Pergunte sobre a barbearia ou escolha uma sugestão abaixo.
               </p>
             </div>
             {/* Suggestion chips */}
@@ -387,6 +387,7 @@ export function CopilotClient({ role }: { role: Role }) {
             type="submit"
             size="sm"
             disabled={!canSend}
+            aria-label="Enviar mensagem"
             className="h-10 w-10 p-0 shrink-0"
           >
             {isLoading ? (

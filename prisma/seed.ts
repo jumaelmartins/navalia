@@ -117,9 +117,11 @@ async function main() {
       onboardingCompleted: true,
     },
     update: {
-      // Keep existing data on re-run but ensure onboarding is marked complete
+      // Keep existing data on re-run but ensure onboarding is marked complete.
+      // Refresh trialEndsAt so the demo is always usable (M14).
       onboardingCompleted: true,
       businessHours: BUSINESS_HOURS,
+      trialEndsAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
     },
   })
 

@@ -915,13 +915,13 @@ export function AgendaClient({
       <div className="flex flex-wrap items-center gap-2">
         {/* Prev/Next/Today */}
         <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon-sm" onClick={handlePrev}>
+          <Button variant="outline" size="icon-sm" onClick={handlePrev} aria-label={view === 'day' ? 'Dia anterior' : 'Semana anterior'}>
             <ChevronLeftIcon className="size-4" />
           </Button>
           <Button variant="outline" size="sm" onClick={handleToday}>
             Hoje
           </Button>
-          <Button variant="outline" size="icon-sm" onClick={handleNext}>
+          <Button variant="outline" size="icon-sm" onClick={handleNext} aria-label={view === 'day' ? 'Próximo dia' : 'Próxima semana'}>
             <ChevronRightIcon className="size-4" />
           </Button>
         </div>
@@ -944,6 +944,7 @@ export function AgendaClient({
           <select
             value={filterProfId}
             onChange={e => setFilterProfId(e.target.value)}
+            aria-label="Filtrar por profissional"
             className="h-7 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
             <option value="all">Todos os profissionais</option>

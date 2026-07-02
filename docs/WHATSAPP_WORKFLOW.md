@@ -28,15 +28,19 @@ Customer msg → Evolution webhook → /api/webhooks/evolution
   → runAssistant('WHATSAPP', tenantId, messages, ctx)
        tools: getServices | getSlots | createAppointment
               | cancelAppointment | getBusinessInfo
+  → Evolution POST /message/sendText         ← send FIRST, then persist
   → persist WhatsappMessage (OUTBOUND)
-  → Evolution POST /message/sendText
 ```
+
+> **Pipeline order (v1):** The assistant reply is sent via Evolution _before_ the outbound `WhatsappMessage` row is persisted. This means if the DB write fails the customer still receives the message, but the log row is missing. A future revision should use an outbox / at-least-once pattern.
 
 ### Debounce
 People type in bursts ("quero cortar" / "amanhã" / "de tarde"). Each inbound message resets a 4-second Redis key; processing runs only when the timer fires, concatenating buffered messages into one turn.
 
 ### Conversation state
 `WhatsappConversation` keyed by `(barbershopId, customerPhone)` with `state: OPEN | WAITING_CONFIRMATION | APPOINTMENT_CREATED | TRANSFERRED_TO_HUMAN | CLOSED`. History feeds the model (windowed). `TRANSFERRED_TO_HUMAN` silences the bot for that conversation until reopened.
+
+> **v1 note:** `WAITING_CONFIRMATION` and `APPOINTMENT_CREATED` are defined in the schema and reserved for a future explicit confirmation flow, but the pipeline never sets them in v1. The bot currently moves directly from `OPEN` to `TRANSFERRED_TO_HUMAN` or `CLOSED`. Do not rely on these states in v1 logic.
 
 ## Chatbot rules
 
@@ -78,6 +82,8 @@ Bot:      Agendado, Carlos! ✂️ Corte + barba, 12/07 às 18:30 com João.
 | OpenAI error/timeout | Fallback message + `TRANSFERRED_TO_HUMAN`; inbound messages still persisted |
 | Duplicate webhook delivery | `WebhookEvent` idempotency — processed once |
 | Booking conflict at confirmation time | Bot apologizes, re-fetches slots, offers alternatives |
+| Redis down (debounce unavailable) | Debounce throws → message is persisted as INBOUND but no AI reply is sent. Conversation is not advanced. Manual intervention or Redis restart required. |
+| Rate limit exceeded (>30 msgs / 5 min per phone) | Message silently dropped after one polite refusal per rate-limit window (`rateLimit` key `rl:wa:{shopId}:{phone}`, 30 requests per 300 s). Customer must wait for the window to reset before the bot replies again. |
 
 ## Roadmap
 

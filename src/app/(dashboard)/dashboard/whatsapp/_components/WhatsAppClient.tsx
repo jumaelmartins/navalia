@@ -243,7 +243,7 @@ export function WhatsAppClient({
                   <li>O cliente escaneia o QR code uma única vez.</li>
                   <li>Após conectado, mensagens chegam automaticamente.</li>
                 </ul>
-                <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 font-medium">
+                <p className="mt-2 text-xs text-[var(--status-no-show)] font-medium">
                   Aviso: esta integração usa a API não-oficial do WhatsApp. Evite envio
                   em massa para proteger o número da barbearia.
                 </p>
@@ -314,7 +314,7 @@ export function WhatsAppClient({
           {status === 'CONNECTED' && (
             <div className="space-y-4">
               <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-4">
-                <CheckCircle2Icon className="size-8 text-green-500 shrink-0" />
+                <CheckCircle2Icon className="size-8 text-[var(--status-completed)] shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-foreground">WhatsApp conectado com sucesso!</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -363,7 +363,7 @@ export function WhatsAppClient({
                 O cliente escaneia o QR code uma única vez — depois disso, a conexão
                 se mantém automaticamente.
               </p>
-              <p className="text-xs text-amber-600 dark:text-amber-400 font-medium pt-1">
+              <p className="text-xs text-[var(--status-no-show)] font-medium pt-1">
                 Esta integração usa o protocolo não-oficial do WhatsApp. Para manter
                 o número seguro, evite envios em massa e use apenas para atendimento
                 de clientes reais.

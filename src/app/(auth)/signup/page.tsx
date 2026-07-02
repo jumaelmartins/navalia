@@ -69,7 +69,7 @@ export default function SignupPage() {
       <Card className="w-full max-w-sm shadow-md">
       <CardHeader className="pb-2">
         <CardTitle className="text-2xl font-semibold font-display">Criar conta</CardTitle>
-        <CardDescription>Comece seu período de avaliação gratuito de 7 dias</CardDescription>
+        <CardDescription>Comece seu período de teste gratuito de 7 dias</CardDescription>
       </CardHeader>
 
       <CardContent>

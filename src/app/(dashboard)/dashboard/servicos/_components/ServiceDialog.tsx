@@ -150,6 +150,10 @@ export function ServiceDialog({ service, open, onOpenChange }: Props) {
                 <SelectValue placeholder="Selecione a duração" />
               </SelectTrigger>
               <SelectContent>
+                {/* Inject current value as extra option when not in the preset list */}
+                {!DURATION_OPTIONS.some((o) => o.value === duration) && (
+                  <SelectItem value={duration}>{duration} min</SelectItem>
+                )}
                 {DURATION_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}

@@ -57,7 +57,7 @@ async function InsightsCard({ tenantId, refreshAction }: {
             </button>
           </form>
         </div>
-        <CardDescription>Analise gerada pela IA com base nos dados reais</CardDescription>
+        <CardDescription>Análise gerada pela IA com base nos dados reais</CardDescription>
       </CardHeader>
       <CardContent>
         {summary.ok ? (
@@ -73,7 +73,7 @@ async function InsightsCard({ tenantId, refreshAction }: {
             <p className="text-sm text-muted-foreground">
               {summary.error.includes('OPENAI_API_KEY')
                 ? 'Configure OPENAI_API_KEY para ativar o resumo de IA.'
-                : 'Nao foi possivel gerar o resumo agora.'}
+                : 'Não foi possível gerar o resumo agora.'}
             </p>
           </div>
         )}

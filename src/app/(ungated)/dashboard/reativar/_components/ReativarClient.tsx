@@ -28,7 +28,7 @@ export function ReativarClient({
 
   const description =
     isExpiredTrial || status === 'TRIALING'
-      ? 'O período de avaliação gratuito expirou. Assine para continuar usando o Navalia.'
+      ? 'O período de teste gratuito expirou. Assine para continuar usando o Navalia.'
       : status === 'PAST_DUE'
         ? 'Não conseguimos processar o último pagamento. Atualize seu cartão para reativar.'
         : 'Sua assinatura foi cancelada. Assine novamente para recuperar o acesso.'
@@ -60,8 +60,8 @@ export function ReativarClient({
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-lg space-y-6 text-center">
         {/* Icon */}
-        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-          <AlertTriangleIcon className="size-7 text-amber-600 dark:text-amber-400" />
+        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-status-no-show/15">
+          <AlertTriangleIcon className="size-7 text-[var(--status-no-show)]" />
         </div>
 
         {/* Heading */}

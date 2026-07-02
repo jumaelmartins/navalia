@@ -1,18 +1,11 @@
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { AppointmentSource, Result } from './types'
 import { addMinutes, computeSlots, isCanonicalDate } from './slots'
+import { dateToWeekday, isRetryableError, type BizHoursMap } from './booking-shared'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** Derives weekday (0=Sun … 6=Sat) from a "YYYY-MM-DD" string without
- *  any timezone shifting: parse as UTC midnight and call getUTCDay(). */
-function dateToWeekday(date: string): number {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
-}
 
 /** Returns "YYYY-MM-DD" for the current instant in the given IANA timezone. */
 function shopLocalDateString(timezone: string): string {
@@ -72,18 +65,6 @@ function normalizePhone(phone: string): string | null {
   return digits
 }
 
-/** Returns true for errors that warrant a single full-transaction retry. */
-function isRetryableError(err: unknown): boolean {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false
-  // P2034: serialization / snapshot-isolation failure
-  if (err.code === 'P2034') return true
-  // P2002: unique constraint race — two concurrent new-customer upserts for the
-  //         same (barbershopId, phone) pair; retry takes the update path.
-  if (err.code === 'P2002') return true
-  return false
-}
-
-type BizHoursMap = Record<string, { start: string; end: string } | null>
 
 // ---------------------------------------------------------------------------
 // getAvailableSlots

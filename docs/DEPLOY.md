@@ -100,8 +100,12 @@ openssl rand -hex 32
 - [ ] `REDIS_URL` — `redis://redis:6379/0`
 - [ ] `STRIPE_SECRET_KEY` — live key
 - [ ] `STRIPE_PRICE_ID` — live price ID
+- [ ] `STRIPE_WEBHOOK_SECRET` — `whsec_...` (reveal in Stripe Dashboard after step 7)
+- [ ] `PLAN_PRICE_CENTS` — plan price in cents, e.g. `9900` for R$ 99,00
 - [ ] `OPENAI_API_KEY` — valid key
+- [ ] `OPENAI_MODEL` — e.g. `gpt-4o-mini` (defaults to `gpt-4o-mini` if unset)
 - [ ] `EVOLUTION_API_KEY` — strong random
+- [ ] `EVOLUTION_WEBHOOK_TOKEN` — same value as `EVOLUTION_API_KEY` (used to verify inbound webhook signature)
 - [ ] `EVOLUTION_WEBHOOK_URL` — `http://app:3000` (internal Docker network)
 
 ---
@@ -234,3 +238,4 @@ Keep at least 7 daily backups. Store offsite (S3, Backblaze B2, etc.).
 | Single-node debounce / rate-limit | The 4-second WhatsApp message debounce and the booking rate limiter use in-process Redis keys. They work correctly on a single instance but are not horizontally scalable without a shared-state revision. |
 | TLS requires port 80/443 open | Caddy's ACME challenge needs ports 80 and 443 reachable from Let's Encrypt servers. Ensure your VPS firewall allows inbound TCP on both ports. |
 | Human-takeover is one-way by default | When the AI detects `[HUMANO]` (WhatsApp only), the conversation enters `TRANSFERRED_TO_HUMAN` state and the bot goes silent. There is no automatic re-activation after a human responds. Operators must manually reactivate the bot from **Dashboard → WhatsApp → Conversas com atendimento humano → Reativar bot** once the manual session ends. |
+| Availability sheet multi-window collapse | If the same barbershop owner has the professional availability settings open in two browser tabs simultaneously, saving in one tab will overwrite the other's unsaved changes without warning. The last write wins. Workaround: always edit availability in a single tab at a time. |

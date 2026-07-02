@@ -1,29 +1,12 @@
 'use server'
 
-import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { requireOnboarded } from '@/modules/tenancy/context'
 import { prisma } from '@/lib/prisma'
 import { getAvailableSlots, createAppointment, computeMinStart } from './create-appointment'
 import { addMinutes, computeSlots, isCanonicalDate } from './slots'
 import { BOOKING_ERROR_PT_BR } from './types'
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function dateToWeekday(date: string): number {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
-}
-
-type BizHoursMap = Record<string, { start: string; end: string } | null>
-
-/** Returns true for errors that warrant a single full-transaction retry. */
-function isRetryableError(err: unknown): boolean {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false
-  return err.code === 'P2034' || err.code === 'P2002'
-}
+import { dateToWeekday, isRetryableError, type BizHoursMap } from './booking-shared'
 
 // ---------------------------------------------------------------------------
 // Types

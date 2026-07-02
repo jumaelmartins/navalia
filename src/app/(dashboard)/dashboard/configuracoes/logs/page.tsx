@@ -82,19 +82,19 @@ const AI_STATUS_CONFIG: Record<AiStatus, { label: string; className: string }> =
 const CHANNEL_CONFIG: Record<string, { label: string; className: string }> = {
   WHATSAPP: {
     label: 'WhatsApp',
-    className: 'bg-emerald-100 text-emerald-800',
+    className: 'bg-[var(--status-completed)] text-[var(--status-completed-fg)]',
   },
   AI_WEB: {
     label: 'IA Web',
-    className: 'bg-blue-100 text-blue-800',
+    className: 'bg-[var(--status-confirmed)] text-[var(--status-confirmed-fg)]',
   },
   COPILOT: {
     label: 'Copiloto',
-    className: 'bg-violet-100 text-violet-800',
+    className: 'bg-muted text-muted-foreground',
   },
   INSIGHTS: {
     label: 'Insights',
-    className: 'bg-amber-100 text-amber-800',
+    className: 'bg-[var(--status-pending)] text-[var(--status-pending-fg)]',
   },
 }
 

@@ -92,16 +92,27 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// Role label
+// ---------------------------------------------------------------------------
+
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Proprietário',
+  BARBER: 'Barbeiro',
+}
+
+// ---------------------------------------------------------------------------
 // SidebarContent
 // ---------------------------------------------------------------------------
 
 function SidebarContent({
   shopName,
   userName,
+  userRole,
   onClose,
 }: {
   shopName: string
   userName: string
+  userRole: string
   onClose?: () => void
 }) {
   const router = useRouter()
@@ -134,7 +145,7 @@ function SidebarContent({
         <div className="flex items-center justify-between rounded-lg px-3 py-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">{userName}</p>
-            <p className="text-xs text-muted-foreground">Proprietário</p>
+            <p className="text-xs text-muted-foreground">{ROLE_LABELS[userRole] ?? userRole}</p>
           </div>
           <button
             onClick={handleSignOut}
@@ -157,13 +168,15 @@ function SidebarContent({
 export function DesktopSidebar({
   shopName,
   userName,
+  userRole,
 }: {
   shopName: string
   userName: string
+  userRole: string
 }) {
   return (
     <aside className="hidden md:flex fixed inset-y-0 left-0 z-30 w-60 flex-col border-r border-border bg-card">
-      <SidebarContent shopName={shopName} userName={userName} />
+      <SidebarContent shopName={shopName} userName={userName} userRole={userRole} />
     </aside>
   )
 }
@@ -175,9 +188,11 @@ export function DesktopSidebar({
 export function MobileSidebar({
   shopName,
   userName,
+  userRole,
 }: {
   shopName: string
   userName: string
+  userRole: string
 }) {
   const [open, setOpen] = useState(false)
 
@@ -210,6 +225,7 @@ export function MobileSidebar({
             <SidebarContent
               shopName={shopName}
               userName={userName}
+              userRole={userRole}
               onClose={() => setOpen(false)}
             />
           </aside>
