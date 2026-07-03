@@ -88,6 +88,9 @@ export function parseMessagesUpsert(payload: unknown): {
   fromPhone: string
   text: string | null
   messageId: string
+  kind: 'text' | 'audio' | 'other'
+  rawMessage: Record<string, unknown> | null
+  audioSeconds: number | null
 } | null {
   if (typeof payload !== 'object' || payload === null) return null
 
@@ -146,7 +149,18 @@ export function parseMessagesUpsert(payload: unknown): {
         : null
     : null
 
-  return { instanceName, fromPhone, text, messageId }
+  const audioMsg =
+    message && typeof message.audioMessage === 'object' && message.audioMessage !== null
+      ? (message.audioMessage as Record<string, unknown>)
+      : null
+
+  const kind: 'text' | 'audio' | 'other' =
+    text !== null ? 'text' : audioMsg ? 'audio' : 'other'
+
+  const audioSeconds =
+    audioMsg && typeof audioMsg.seconds === 'number' ? audioMsg.seconds : null
+
+  return { instanceName, fromPhone, text, messageId, kind, rawMessage: message, audioSeconds }
 }
 
 // ---------------------------------------------------------------------------
