@@ -3,6 +3,7 @@
  * Extracted to avoid duplication (M4).
  */
 import { Prisma } from '@prisma/client'
+import { isDriverAdapterError } from '@prisma/driver-adapter-utils'
 
 /** Derives weekday (0=Sun … 6=Sat) from a "YYYY-MM-DD" string without
  *  any timezone shifting: parse as UTC midnight and call getUTCDay(). */
@@ -23,12 +24,9 @@ export function isRetryableError(err: unknown): boolean {
   }
   // DriverAdapterError: TransactionWriteConflict — serialization failure surfaced
   // directly from @prisma/adapter-pg (PgAdapter path) without being wrapped as P2034.
-  if (
-    typeof err === 'object' &&
-    err !== null &&
-    (err as Record<string, unknown>)['name'] === 'DriverAdapterError' &&
-    (err as Record<string, unknown>)['message'] === 'TransactionWriteConflict'
-  ) {
+  // Match on cause.kind (the stable discriminant) rather than err.message, which is a
+  // fallback from payload.kind only when payload has no "message" field — fragile.
+  if (isDriverAdapterError(err) && err.cause.kind === 'TransactionWriteConflict') {
     return true
   }
   return false
