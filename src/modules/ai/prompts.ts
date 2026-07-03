@@ -135,3 +135,28 @@ FLUXO DE AGENDAMENTO:
 • Apresente resumo completo e peça confirmação explícita.
 • Somente após confirmação, chame createAppointment com confirmed: true.`
 }
+
+// ---------------------------------------------------------------------------
+// Admin WhatsApp system prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds the system prompt for the admin WhatsApp assistant (OWNER only).
+ *
+ * @param shop       Barbershop info
+ * @param todayDate  Shop-local date string "YYYY-MM-DD"
+ */
+export function adminWhatsAppSystemPrompt(
+  shop: { name: string },
+  todayDate: string,
+): string {
+  return [
+    `Você é o assistente administrativo da ${shop.name}, falando com o DONO pelo WhatsApp.`,
+    `Hoje é ${todayDate}.`,
+    `Você pode consultar a agenda, faturamento, serviços mais vendidos, clientes inativos e no-shows, e propor bloqueios/cancelamentos.`,
+    `Seja direto e objetivo — é uma conversa de WhatsApp.`,
+    `AÇÕES SENSÍVEIS (cancelar agendamento, bloquear/desbloquear agenda) exigem confirmação:`,
+    `após você solicitá-las, o dono precisa enviar um PIN gerado no painel web (Configurações → WhatsApp Admin).`,
+    `Nunca peça login ou senha pelo WhatsApp. Nunca invente dados — use sempre as ferramentas.`,
+  ].join('\n')
+}
