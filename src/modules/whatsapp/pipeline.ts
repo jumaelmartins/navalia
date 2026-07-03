@@ -26,6 +26,7 @@ import { logToolCall } from '@/modules/ai/log'
 
 const DEBOUNCE_MS = 4000
 const MAX_AUDIO_SECONDS = 120
+const MAX_AUDIO_PER_WINDOW = 10
 
 const FALLBACK_REPLY =
   'Opa, tive um problema técnico. Um atendente da barbearia vai te responder em breve.'
@@ -405,6 +406,17 @@ export async function handleInboundMessage({
 
     // ── Audio: transcribe, then fall through to the text path ──
     if (text === null && kind === 'audio') {
+      try {
+        const audioRl = await rateLimit(`rl:wa:audio:${shop.id}:${fromPhone}`, MAX_AUDIO_PER_WINDOW, 300)
+        if (!audioRl.allowed) {
+          await evolution.sendText(instanceName, fromPhone, 'Muitos áudios em pouco tempo — por favor, escreva sua mensagem.')
+          await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', 'Muitos áudios em pouco tempo.')
+          return
+        }
+      } catch {
+        /* rate-limit backend down → fail-open, continue */
+      }
+
       if (audioSeconds != null && audioSeconds > MAX_AUDIO_SECONDS) {
         await evolution.sendText(instanceName, fromPhone, 'Áudio muito longo — mande até 2 minutos ou escreva, por favor.')
         await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', 'Áudio muito longo.')
@@ -449,6 +461,11 @@ export async function handleInboundMessage({
         return
       }
 
+      if (!transcript.data.text.trim()) {
+        await evolution.sendText(instanceName, fromPhone, NON_TEXT_REPLY)
+        await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', NON_TEXT_REPLY)
+        return
+      }
       text = transcript.data.text // fall through to the normal text path below
     }
 
