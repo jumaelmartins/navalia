@@ -2,7 +2,7 @@
 // AI module public contracts — Task 15
 // ---------------------------------------------------------------------------
 
-export type Channel = 'WHATSAPP' | 'AI_WEB' | 'COPILOT'
+export type Channel = 'WHATSAPP' | 'AI_WEB' | 'COPILOT' | 'WHATSAPP_ADMIN'
 
 export type ChatMsg = { role: 'user' | 'assistant'; content: string }
 

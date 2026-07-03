@@ -66,6 +66,11 @@ model Barbershop {
   evolutionInstanceId  String?  @unique
   whatsappStatus       WhatsappStatus @default(DISCONNECTED)
   onboardingCompleted  Boolean  @default(false)
+  adminPhones         String[]  @default([])
+  adminPinHash        String?
+  adminPinExpiresAt   DateTime?
+  ownerNotifyPhone    String?
+  notifyOwnerWhatsapp Boolean   @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   users         User[]
@@ -73,6 +78,7 @@ model Barbershop {
   services      Service[]
   customers     Customer[]
   appointments  Appointment[]
+  notifications Notification[]
 }
 
 model User {
@@ -250,7 +256,9 @@ model WhatsappConversation {
   id            String @id @default(cuid())
   barbershopId  String
   customerPhone String
-  state         ConversationState @default(OPEN)
+  state                  ConversationState @default(OPEN)
+  pendingActionId        String?
+  pendingActionExpiresAt DateTime?
   lastMessageAt DateTime @default(now())
   messages      WhatsappMessage[]
   createdAt     DateTime @default(now())
@@ -282,6 +290,20 @@ model AiActionLog {
   confirmedAt          DateTime?
   userId               String?
   createdAt            DateTime @default(now())
+  @@index([barbershopId, createdAt])
+}
+
+model Notification {
+  id            String    @id @default(cuid())
+  barbershopId  String
+  type          String // APPOINTMENT_CREATED
+  appointmentId String?
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id])
+
+  @@index([barbershopId, readAt])
   @@index([barbershopId, createdAt])
 }
 
