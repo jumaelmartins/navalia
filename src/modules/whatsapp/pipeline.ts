@@ -17,12 +17,15 @@ import {
 import { buildCopilotTools } from '@/modules/ai/tools/copilot-tools'
 import { confirmSensitiveAction } from '@/modules/ai/confirm-action'
 import { verifyPin } from '@/lib/pin'
+import { transcribeAudio } from '@/modules/whatsapp/transcribe'
+import { logToolCall } from '@/modules/ai/log'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const DEBOUNCE_MS = 4000
+const MAX_AUDIO_SECONDS = 120
 
 const FALLBACK_REPLY =
   'Opa, tive um problema técnico. Um atendente da barbearia vai te responder em breve.'
@@ -259,15 +262,22 @@ async function sendFallback(
 export async function handleInboundMessage({
   instanceName,
   fromPhone,
-  text,
+  text: inputText,
   messageId: _messageId,
+  kind,
+  rawMessage,
+  audioSeconds,
 }: {
   instanceName: string
   fromPhone: string
   text: string | null
   messageId: string
+  kind: 'text' | 'audio' | 'other'
+  rawMessage: Record<string, unknown> | null
+  audioSeconds: number | null
 }): Promise<void> {
   try {
+    let text = inputText
     // ── 1. Resolve barbershop ───────────────────────────────────────────────
     const shop = await prisma.barbershop
       .findUnique({
@@ -392,6 +402,57 @@ export async function handleInboundMessage({
     }
 
     // ── 5. Handle non-text messages (bot is active at this point) ───────────────
+
+    // ── Audio: transcribe, then fall through to the text path ──
+    if (text === null && kind === 'audio') {
+      if (audioSeconds != null && audioSeconds > MAX_AUDIO_SECONDS) {
+        await evolution.sendText(instanceName, fromPhone, 'Áudio muito longo — mande até 2 minutos ou escreva, por favor.')
+        await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', 'Áudio muito longo.')
+        return
+      }
+
+      const media = rawMessage
+        ? await evolution.getBase64FromMedia(instanceName, rawMessage)
+        : { ok: false as const, error: 'sem mídia' }
+
+      if (!media.ok) {
+        await evolution.sendText(instanceName, fromPhone, NON_TEXT_REPLY)
+        await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', NON_TEXT_REPLY)
+        return
+      }
+
+      // Seed proper nouns (services + professionals) to improve transcription.
+      const [services, pros] = await Promise.all([
+        prisma.service.findMany({ where: { barbershopId: shop.id, isActive: true }, select: { name: true } }),
+        prisma.professional.findMany({ where: { barbershopId: shop.id, isActive: true }, select: { name: true } }),
+      ])
+      const contextPrompt = [...services.map((s) => s.name), ...pros.map((p) => p.name)].join(', ')
+
+      const transcript = await transcribeAudio({
+        base64: media.data.base64,
+        mimetype: media.data.mimetype,
+        contextPrompt: contextPrompt || undefined,
+      })
+
+      // Observability / cost log (best-effort)
+      await logToolCall({
+        ctx: { tenantId: shop.id, channel: 'WHATSAPP' },
+        toolName: 'transcribeAudio',
+        input: { seconds: audioSeconds },
+        output: transcript.ok ? { chars: transcript.data.text.length } : { error: transcript.error },
+        status: transcript.ok ? 'EXECUTED' : 'ERROR',
+      }).catch(() => {})
+
+      if (!transcript.ok) {
+        await evolution.sendText(instanceName, fromPhone, NON_TEXT_REPLY)
+        await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', NON_TEXT_REPLY)
+        return
+      }
+
+      text = transcript.data.text // fall through to the normal text path below
+    }
+
+    // ── Other non-text (image/sticker/...) → send unchanged reply ──
     if (text === null) {
       await evolution.sendText(instanceName, fromPhone, NON_TEXT_REPLY)
       await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', NON_TEXT_REPLY)

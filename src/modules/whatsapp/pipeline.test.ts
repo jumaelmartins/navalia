@@ -134,6 +134,9 @@ const BASE_ARGS = {
   fromPhone: '5571999990001',
   text: 'Oi, quero agendar',
   messageId: 'msg-abc',
+  kind: 'text' as const,
+  rawMessage: null,
+  audioSeconds: null,
 }
 
 beforeEach(() => {
@@ -499,7 +502,7 @@ describe('handleInboundMessage: shop not found → silently ignored', () => {
 
 describe('handleInboundMessage: non-text message (text = null)', () => {
   it('sends non-text reply and persists OUTBOUND SYSTEM (does not run bot)', async () => {
-    await handleInboundMessage({ ...BASE_ARGS, text: null })
+    await handleInboundMessage({ ...BASE_ARGS, text: null, kind: 'other' })
 
     expect(mockSendText).toHaveBeenCalledWith(
       'nav_shop1',
@@ -515,7 +518,7 @@ describe('handleInboundMessage: non-text + TRANSFERRED_TO_HUMAN → silent', () 
   it('does NOT send NON_TEXT_REPLY when conversation is TRANSFERRED_TO_HUMAN', async () => {
     mockUpsertConv.mockResolvedValue(TRANSFERRED_CONV)
 
-    await handleInboundMessage({ ...BASE_ARGS, text: null })
+    await handleInboundMessage({ ...BASE_ARGS, text: null, kind: 'other' })
 
     expect(mockSendText).not.toHaveBeenCalled()
     expect(mockCreateMsg).not.toHaveBeenCalled()
