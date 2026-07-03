@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import type { AppointmentSource, Result } from './types'
 import { addMinutes, computeSlots, isCanonicalDate } from './slots'
 import { dateToWeekday, isRetryableError, type BizHoursMap } from './booking-shared'
+import { pushNewAppointmentToOwner } from '@/modules/notifications/push'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -343,12 +344,21 @@ export async function createAppointment(args: {
     )
 
   try {
-    return await runTx()
+    const result = await runTx()
+    if (result.ok) {
+      // Best-effort owner push — must never affect the booking result.
+      await pushNewAppointmentToOwner(args.tenantId, result.data.appointmentId).catch(() => {})
+    }
+    return result
   } catch (err) {
     if (isRetryableError(err)) {
       // One retry: covers both PostgreSQL serialization failures (P2034) and
       // concurrent new-customer unique-constraint races (P2002).
-      return await runTx()
+      const result = await runTx()
+      if (result.ok) {
+        await pushNewAppointmentToOwner(args.tenantId, result.data.appointmentId).catch(() => {})
+      }
+      return result
     }
     throw err
   }
