@@ -51,12 +51,18 @@ export function NotificationBell() {
   }, [open])
 
   async function markAll() {
-    await fetch('/api/notifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ all: true }),
-    })
-    load()
+    try {
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      })
+    } catch {
+      /* swallow transient errors */
+    } finally {
+      setOpen(false)
+      load()
+    }
   }
 
   return (
@@ -67,7 +73,7 @@ export function NotificationBell() {
         onClick={() => setOpen((o) => !o)}
         className="relative flex items-center justify-center rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
-        <BellIcon className="size-4" />
+        <BellIcon className="size-4" aria-hidden="true" />
         {unread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
             {unread > 9 ? '9+' : unread}
