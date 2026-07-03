@@ -76,14 +76,17 @@ export async function handleAdminTurn(args: {
 
   // ---- Branch: live pending + cancel ----
   if (pendingId && kind === 'cancel') {
-    await deps.confirmSensitiveAction({
+    const res = await deps.confirmSensitiveAction({
       actionId: pendingId,
       barbershop: { id: shop.id, timezone: shop.timezone },
       userId: ownerUserId,
       channel: 'WHATSAPP_ADMIN',
       reject: true,
     })
-    return { reply: 'Ação cancelada.', setPending: null }
+    return {
+      reply: res.ok ? 'Ação cancelada.' : 'Essa ação já não estava mais pendente.',
+      setPending: null,
+    }
   }
 
   // ---- Branch: live pending + pin ----

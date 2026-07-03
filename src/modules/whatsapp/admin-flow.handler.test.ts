@@ -151,4 +151,21 @@ describe('handleAdminTurn', () => {
     // pending already expired → treated as a fresh command, pending cleared
     expect(out.setPending).toBeNull()
   })
+
+  it('reprompts without calling runAssistant when pending is live', async () => {
+    const d = deps() // runAssistant is a vi.fn() (not configured to resolve)
+    const out = await handleAdminTurn({
+      shop: baseShop,
+      ownerUserId: 'u1',
+      conversation: { pendingActionId: 'act-1', pendingActionExpiresAt: new Date('2026-07-03T12:03:00Z') },
+      text: 'o que devo fazer?', // not 6-digit, not 'cancelar'
+      history: [],
+      today: '2026-07-03',
+      now,
+      deps: d,
+    })
+    expect(d.runAssistant).not.toHaveBeenCalled()
+    expect(out.setPending).toBeUndefined()
+    expect(out.reply.toLowerCase()).toContain('cancelar')
+  })
 })
