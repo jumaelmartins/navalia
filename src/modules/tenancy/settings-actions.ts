@@ -4,8 +4,8 @@ import { randomInt } from 'node:crypto'
 import { z } from 'zod'
 import { requireOwner } from '@/modules/tenancy/context'
 import { prisma } from '@/lib/prisma'
-import { normalizePhone } from '@/modules/whatsapp/evolution-client'
 import { hashPin } from '@/lib/pin'
+import { normalizeAdminPhones } from './admin-channel-utils'
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -74,28 +74,6 @@ export async function saveShopSettings(
 // ---------------------------------------------------------------------------
 
 const ADMIN_PIN_TTL_MS = 5 * 60 * 1000
-
-/** Normalize + dedupe admin/notify phones and forbid the shop's own line. */
-export function normalizeAdminPhones(
-  rawPhones: string[],
-  shopPhone: string | null,
-): { ok: true; phones: string[] } | { ok: false; error: string } {
-  const own = shopPhone ? normalizePhone(shopPhone) : null
-  const out = new Set<string>()
-  for (const raw of rawPhones) {
-    const trimmed = raw.trim()
-    if (!trimmed) continue
-    const p = normalizePhone(trimmed)
-    if (own && p === own) {
-      return {
-        ok: false,
-        error: 'Use um número pessoal, diferente do número da barbearia.',
-      }
-    }
-    out.add(p)
-  }
-  return { ok: true, phones: [...out] }
-}
 
 const AdminChannelSchema = z.object({
   adminPhones: z.array(z.string()).default([]),

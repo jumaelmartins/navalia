@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeAdminPhones } from './settings-actions'
+import { normalizeAdminPhones } from './admin-channel-utils'
 
 describe('normalizeAdminPhones', () => {
   it('normalizes and dedupes numbers', () => {

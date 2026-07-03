@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { saveShopSettings } from '@/modules/tenancy/settings-actions'
 import { saveBusinessHours } from '@/modules/tenancy/onboarding-actions'
 import type { BusinessHours } from '@/modules/tenancy/business-hours'
+import { AdminChannelCard } from './AdminChannelCard'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -50,6 +51,9 @@ interface ShopSettingsClientProps {
     timezone: string
     cancellationPolicy: string | null
     businessHours: BusinessHours
+    adminPhones: string[]
+    ownerNotifyPhone: string | null
+    notifyOwnerWhatsapp: boolean
   }
   publicUrl: string
 }
@@ -402,6 +406,23 @@ export function ShopSettingsClient({ barbershop, publicUrl }: ShopSettingsClient
         </div>
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <BusinessHoursEditor initial={barbershop.businessHours} />
+        </div>
+      </section>
+
+      {/* WhatsApp admin channel & notifications */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">WhatsApp Admin &amp; Notificações</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Gerencie os números que operam o painel via WhatsApp e configure avisos de novos agendamentos.
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <AdminChannelCard
+            adminPhones={barbershop.adminPhones}
+            ownerNotifyPhone={barbershop.ownerNotifyPhone}
+            notifyOwnerWhatsapp={barbershop.notifyOwnerWhatsapp}
+          />
         </div>
       </section>
     </div>

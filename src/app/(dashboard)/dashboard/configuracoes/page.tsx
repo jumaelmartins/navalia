@@ -19,6 +19,9 @@ export default async function ConfiguracoesPage() {
         timezone: barbershop.timezone,
         cancellationPolicy: barbershop.cancellationPolicy,
         businessHours: barbershop.businessHours as BusinessHours,
+        adminPhones: barbershop.adminPhones as string[],
+        ownerNotifyPhone: barbershop.ownerNotifyPhone,
+        notifyOwnerWhatsapp: barbershop.notifyOwnerWhatsapp,
       }}
       publicUrl={publicUrl}
     />
