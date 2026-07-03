@@ -16,8 +16,20 @@ export type BizHoursMap = Record<string, { start: string; end: string } | null>
 
 /** Returns true for errors that warrant a single full-transaction retry. */
 export function isRetryableError(err: unknown): boolean {
-  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return false
-  // P2034: serialization / snapshot-isolation failure
-  // P2002: unique constraint race — two concurrent new-customer upserts
-  return err.code === 'P2034' || err.code === 'P2002'
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    // P2034: serialization / snapshot-isolation failure
+    // P2002: unique constraint race — two concurrent new-customer upserts
+    return err.code === 'P2034' || err.code === 'P2002'
+  }
+  // DriverAdapterError: TransactionWriteConflict — serialization failure surfaced
+  // directly from @prisma/adapter-pg (PgAdapter path) without being wrapped as P2034.
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as Record<string, unknown>)['name'] === 'DriverAdapterError' &&
+    (err as Record<string, unknown>)['message'] === 'TransactionWriteConflict'
+  ) {
+    return true
+  }
+  return false
 }

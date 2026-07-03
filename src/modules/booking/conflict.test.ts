@@ -66,6 +66,7 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
   afterAll(async () => {
     // Delete in FK order so constraints don't fire
     await prisma.auditLog.deleteMany({ where: { barbershopId } })
+    await prisma.notification.deleteMany({ where: { barbershopId } })
     await prisma.appointment.deleteMany({ where: { barbershopId } })
     await prisma.customer.deleteMany({ where: { barbershopId } })
     await prisma.scheduleBlock.deleteMany({ where: { barbershopId } })

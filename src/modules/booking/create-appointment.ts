@@ -320,6 +320,15 @@ export async function createAppointment(args: {
           },
         })
 
+        // --- 8. Owner notification (atomic with booking) ---
+        await tx.notification.create({
+          data: {
+            barbershopId: args.tenantId,
+            type: 'APPOINTMENT_CREATED',
+            appointmentId: appointment.id,
+          },
+        })
+
         return {
           ok: true as const,
           data: {
@@ -330,7 +339,7 @@ export async function createAppointment(args: {
           },
         }
       },
-      { isolationLevel: 'Serializable' },
+      { isolationLevel: 'Serializable', timeout: 15000 },
     )
 
   try {
