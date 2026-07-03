@@ -257,4 +257,39 @@ export const evolution = {
       headers: buildHeaders(),
     })
   },
+
+  /**
+   * Download and decrypt media from a WhatsApp message via Evolution API.
+   *
+   * B0 probe finding (verified against live v2.3.7 container):
+   *   POST /chat/getBase64FromMediaMessage/{instanceName} accepts
+   *   { message: rawMessage, convertToMp4: false } — sending a dummy key
+   *   returned HTTP 400 "Message not found" (not 404), confirming the route
+   *   exists and the body shape is correct. Response fields base64/mimetype
+   *   were NOT confirmed on a real media message (deferred to B4 E2E).
+   *
+   * Defensive implementation: returns { ok: false, error } when base64 is
+   * absent; defaults mimetype to 'audio/ogg' when missing from response.
+   */
+  async getBase64FromMedia(
+    instanceName: string,
+    rawMessage: Record<string, unknown>,
+  ): Promise<Result<{ base64: string; mimetype: string }>> {
+    const res = await apiFetch<{ base64?: string; mimetype?: string }>(
+      buildUrl(`/chat/getBase64FromMediaMessage/${instanceName}`),
+      {
+        method: 'POST',
+        headers: buildHeaders(),
+        body: JSON.stringify({ message: rawMessage, convertToMp4: false }),
+      },
+    )
+    if (!res.ok) return res
+    if (!res.data.base64) {
+      return { ok: false, error: 'Media base64 ausente na resposta.' }
+    }
+    return {
+      ok: true,
+      data: { base64: res.data.base64, mimetype: res.data.mimetype ?? 'audio/ogg' },
+    }
+  },
 }
