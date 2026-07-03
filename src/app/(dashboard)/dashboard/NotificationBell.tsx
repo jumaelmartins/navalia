@@ -33,6 +33,7 @@ export function NotificationBell() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load is async; setState calls happen only after `await fetch(...)`, never synchronously
     load()
     const id = setInterval(load, 30_000)
     return () => clearInterval(id)

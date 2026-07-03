@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { handleAdminTurn } from './admin-flow'
+import { handleAdminTurn, type AdminDeps } from './admin-flow'
 import { hashPin } from '@/lib/pin'
 import { verifyPin } from '@/lib/pin'
 
@@ -11,7 +11,7 @@ const baseShop = {
   adminPinExpiresAt: null as Date | null,
 }
 
-function deps(over: Partial<any> = {}) {
+function deps(over: Partial<AdminDeps> = {}) {
   return {
     runAssistant: vi.fn(),
     buildCopilotTools: vi.fn().mockReturnValue([]),
@@ -19,7 +19,7 @@ function deps(over: Partial<any> = {}) {
     confirmSensitiveAction: vi.fn(),
     verifyPin,
     ...over,
-  } as any
+  } as unknown as AdminDeps
 }
 
 const now = new Date('2026-07-03T12:00:00Z')
