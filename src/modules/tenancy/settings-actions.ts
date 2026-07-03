@@ -107,22 +107,23 @@ export async function saveAdminChannelConfig(
   input: z.infer<typeof AdminChannelSchema>,
 ): Promise<ActionResult> {
   const { barbershop } = await requireOwner()
-  const parsed = AdminChannelSchema.safeParse(input)
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }
-  }
-
-  const admin = normalizeAdminPhones(parsed.data.adminPhones, barbershop.phone)
-  if (!admin.ok) return admin
-
-  let notifyPhone: string | null = null
-  if (parsed.data.ownerNotifyPhone && parsed.data.ownerNotifyPhone.trim()) {
-    const notify = normalizeAdminPhones([parsed.data.ownerNotifyPhone], barbershop.phone)
-    if (!notify.ok) return notify
-    notifyPhone = notify.phones[0] ?? null
-  }
 
   try {
+    const parsed = AdminChannelSchema.safeParse(input)
+    if (!parsed.success) {
+      return { ok: false, error: 'Dados inválidos.' }
+    }
+
+    const admin = normalizeAdminPhones(parsed.data.adminPhones, barbershop.phone)
+    if (!admin.ok) return admin
+
+    let notifyPhone: string | null = null
+    if (parsed.data.ownerNotifyPhone && parsed.data.ownerNotifyPhone.trim()) {
+      const notify = normalizeAdminPhones([parsed.data.ownerNotifyPhone], barbershop.phone)
+      if (!notify.ok) return notify
+      notifyPhone = notify.phones[0] ?? null
+    }
+
     await prisma.barbershop.update({
       where: { id: barbershop.id },
       data: {
