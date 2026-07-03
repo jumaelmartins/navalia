@@ -109,6 +109,9 @@ const SHOP = {
   subscriptionStatus: 'ACTIVE' as const,
   trialEndsAt: new Date('2030-01-01'),
   evolutionInstanceId: 'nav_shop1',
+  adminPhones: [] as string[],
+  adminPinHash: null,
+  adminPinExpiresAt: null,
 }
 
 const OPEN_CONV = {

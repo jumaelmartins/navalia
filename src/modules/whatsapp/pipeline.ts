@@ -330,7 +330,7 @@ export async function handleInboundMessage({
     }
 
     // ── Admin channel: owner-registered phones operate the panel via WhatsApp ──
-    if (text !== null && shop.adminPhones?.length && isAdminPhone(shop.adminPhones, fromPhone)) {
+    if (text !== null && shop.adminPhones.length > 0 && isAdminPhone(shop.adminPhones, fromPhone)) {
       const owner = await prisma.user.findFirst({
         where: { barbershopId: shop.id, role: 'OWNER' },
         select: { id: true },
@@ -564,7 +564,7 @@ async function handleAdminInbound(
   // Upsert admin conversation and persist inbound message for audit trail.
   const convo = await prisma.whatsappConversation.upsert({
     where: { barbershopId_customerPhone: { barbershopId: shop.id, customerPhone: fromPhone } },
-    update: { lastMessageAt: new Date() },
+    update: { lastMessageAt: new Date(), state: 'OPEN' },
     create: { barbershopId: shop.id, customerPhone: fromPhone, state: 'OPEN' },
   })
   await persistMessage(shop, convo, 'INBOUND', 'CUSTOMER', text)
@@ -661,8 +661,13 @@ async function handleAdminInbound(
           })
         }
 
-        await evolution.sendText(shop.evolutionInstanceId!, fromPhone, outcome.reply)
-        await persistMessage(shop, convo, 'OUTBOUND', 'AI', outcome.reply)
+        const sendResult = await evolution.sendText(shop.evolutionInstanceId!, fromPhone, outcome.reply)
+        if (sendResult.ok) {
+          await persistMessage(shop, convo, 'OUTBOUND', 'AI', outcome.reply)
+        } else {
+          console.error('[pipeline] admin sendText failed', sendResult.error)
+          await persistMessage(shop, convo, 'OUTBOUND', 'SYSTEM', '[FALHA NO ENVIO] ' + outcome.reply)
+        }
       } catch (err) {
         console.error('[pipeline] handleAdminInbound flush error', err)
       }
