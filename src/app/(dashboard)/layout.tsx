@@ -5,6 +5,7 @@ import { hasAccess } from '@/modules/billing/gate'
 import { Toaster } from '@/components/ui/sonner'
 import { DesktopSidebar, MobileSidebar } from './_components/SidebarNav'
 import { TrialBanner } from './_components/TrialBanner'
+import { NotificationBell } from './dashboard/NotificationBell'
 
 // Only the subscription management page bypasses the billing gate so locked
 // tenants can still reach the checkout flow. Narrowed from the full
@@ -43,6 +44,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* Page content — offset by sidebar on md+ */}
       <div className="md:pl-60">
+        {/* Top bar: notification bell (and future header actions) */}
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-end border-b border-border bg-background/80 px-4 backdrop-blur-sm">
+          <NotificationBell />
+        </header>
+
         {/* Trial banner — rendered only while TRIALING (gate redirects when expired) */}
         {isTrialing && (
           <TrialBanner
