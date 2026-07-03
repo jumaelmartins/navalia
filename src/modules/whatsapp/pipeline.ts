@@ -5,10 +5,18 @@ import { isOpenAIConfigured } from '@/lib/openai'
 import { rateLimit } from '@/lib/rate-limit'
 import { runAssistant } from '@/modules/ai/orchestrator'
 import { buildPublicTools } from '@/modules/ai/tools/public-tools'
-import { publicSystemPrompt } from '@/modules/ai/prompts'
+import { publicSystemPrompt, adminWhatsAppSystemPrompt } from '@/modules/ai/prompts'
 import { evolution } from './evolution-client'
 import { scheduleDebounced } from './debounce'
 import type { ChatMsg } from '@/modules/ai/types'
+import {
+  isAdminPhone,
+  handleAdminTurn,
+  type AdminDeps,
+} from '@/modules/whatsapp/admin-flow'
+import { buildCopilotTools } from '@/modules/ai/tools/copilot-tools'
+import { confirmSensitiveAction } from '@/modules/ai/confirm-action'
+import { verifyPin } from '@/lib/pin'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -29,6 +37,18 @@ const HUMAN_MARKER = '[HUMANO]'
 
 const HUMAN_HANDOFF_SUFFIX =
   '\nUm atendente da barbearia vai continuar a conversa por aqui.'
+
+// ---------------------------------------------------------------------------
+// Admin dependencies — wired once at module scope
+// ---------------------------------------------------------------------------
+
+const adminDeps: AdminDeps = {
+  runAssistant,
+  buildCopilotTools,
+  adminPrompt: adminWhatsAppSystemPrompt,
+  confirmSensitiveAction,
+  verifyPin,
+}
 
 // ---------------------------------------------------------------------------
 // extractUpsertMessages — normalizes the two MESSAGES_UPSERT data shapes
@@ -155,6 +175,9 @@ type ShopRecord = {
   subscriptionStatus: import('@prisma/client').SubscriptionStatus
   trialEndsAt: Date
   evolutionInstanceId: string | null
+  adminPhones: string[]
+  adminPinHash: string | null
+  adminPinExpiresAt: Date | null
 }
 
 type ConvRecord = {
@@ -246,6 +269,9 @@ export async function handleInboundMessage({
           subscriptionStatus: true,
           trialEndsAt: true,
           evolutionInstanceId: true,
+          adminPhones: true,
+          adminPinHash: true,
+          adminPinExpiresAt: true,
         },
       })
       .catch(() => null)
@@ -301,6 +327,19 @@ export async function handleInboundMessage({
       }
       await persistMessage(shop, conv, 'OUTBOUND', 'SYSTEM', ACCESS_DENIED_REPLY)
       return
+    }
+
+    // ── Admin channel: owner-registered phones operate the panel via WhatsApp ──
+    if (text !== null && shop.adminPhones?.length && isAdminPhone(shop.adminPhones, fromPhone)) {
+      const owner = await prisma.user.findFirst({
+        where: { barbershopId: shop.id, role: 'OWNER' },
+        select: { id: true },
+      })
+      if (owner) {
+        await handleAdminInbound(shop, owner.id, fromPhone, text)
+        return
+      }
+      // no owner user → fall through to the normal customer flow (defensive)
     }
 
     // ── 3. Upsert conversation ──────────────────────────────────────────────
@@ -510,4 +549,123 @@ async function flushToAI({
       })
       .catch(err => console.error('[pipeline] state→TRANSFERRED error', err))
   }
+}
+
+// ---------------------------------------------------------------------------
+// handleAdminInbound — admin WhatsApp pipeline (owner-registered phones)
+// ---------------------------------------------------------------------------
+
+async function handleAdminInbound(
+  shop: ShopRecord,
+  ownerUserId: string,
+  fromPhone: string,
+  text: string,
+): Promise<void> {
+  // Upsert admin conversation and persist inbound message for audit trail.
+  const convo = await prisma.whatsappConversation.upsert({
+    where: { barbershopId_customerPhone: { barbershopId: shop.id, customerPhone: fromPhone } },
+    update: { lastMessageAt: new Date() },
+    create: { barbershopId: shop.id, customerPhone: fromPhone, state: 'OPEN' },
+  })
+  await persistMessage(shop, convo, 'INBOUND', 'CUSTOMER', text)
+
+  // Rate limit with admin-specific key so it doesn't share quota with customer flow.
+  try {
+    const rl = await rateLimit(`rl:wa:admin:${shop.id}:${fromPhone}`, 30, 300)
+    if (!rl.allowed) return
+  } catch {
+    /* Redis unavailable — fail open */
+  }
+
+  // Debounce with admin-specific key so admin and customer bursts don't mix.
+  await scheduleDebounced(
+    `wa:admin:${shop.id}:${fromPhone}`,
+    text,
+    DEBOUNCE_MS,
+    async (fragments: string[]) => {
+      try {
+        // Re-read conversation (pending state may have changed during debounce window).
+        const fresh = await prisma.whatsappConversation.findUnique({
+          where: { barbershopId_customerPhone: { barbershopId: shop.id, customerPhone: fromPhone } },
+          select: { pendingActionId: true, pendingActionExpiresAt: true },
+        })
+        // Re-read shop PIN fields (may have been generated/consumed in the window).
+        const shopNow = await prisma.barbershop.findUnique({
+          where: { id: shop.id },
+          select: { adminPinHash: true, adminPinExpiresAt: true },
+        })
+
+        // Load conversation history, excluding the current burst messages.
+        // Mirrors the approach in flushToAI: take desc, reverse, then exclude
+        // exactly fragments.length trailing INBOUND-CUSTOMER rows.
+        const rawMsgs = await prisma.whatsappMessage.findMany({
+          where: { conversationId: convo.id },
+          orderBy: { createdAt: 'desc' },
+          take: 20 + fragments.length,
+        })
+        const chronological = rawMsgs.reverse()
+        const toExclude = new Set<number>()
+        let remaining = fragments.length
+        for (let i = chronological.length - 1; i >= 0 && remaining > 0; i--) {
+          const m = chronological[i]
+          if (m.direction === 'INBOUND' && m.senderType === 'CUSTOMER') {
+            toExclude.add(i)
+            remaining--
+          }
+        }
+        const historySubset = chronological.filter((_, i) => !toExclude.has(i))
+        const history: ChatMsg[] = historySubset
+          .filter(m => !(m.direction === 'OUTBOUND' && m.senderType === 'SYSTEM'))
+          .slice(-20)
+          .map(m => ({
+            role: (m.direction === 'INBOUND' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.content,
+          }))
+
+        const today = getShopLocalDate(shop.timezone)
+
+        const outcome = await handleAdminTurn({
+          shop: {
+            id: shop.id,
+            name: shop.name,
+            timezone: shop.timezone,
+            adminPinHash: shopNow?.adminPinHash ?? null,
+            adminPinExpiresAt: shopNow?.adminPinExpiresAt ?? null,
+          },
+          ownerUserId,
+          conversation: {
+            pendingActionId: fresh?.pendingActionId ?? null,
+            pendingActionExpiresAt: fresh?.pendingActionExpiresAt ?? null,
+          },
+          text: fragments.join('\n'),
+          history,
+          today,
+          now: new Date(),
+          deps: adminDeps,
+        })
+
+        // Apply persistence intents.
+        if (outcome.setPending !== undefined) {
+          await prisma.whatsappConversation.update({
+            where: { barbershopId_customerPhone: { barbershopId: shop.id, customerPhone: fromPhone } },
+            data: {
+              pendingActionId: outcome.setPending?.actionId ?? null,
+              pendingActionExpiresAt: outcome.setPending?.expiresAt ?? null,
+            },
+          })
+        }
+        if (outcome.consumePin) {
+          await prisma.barbershop.update({
+            where: { id: shop.id },
+            data: { adminPinHash: null, adminPinExpiresAt: null },
+          })
+        }
+
+        await evolution.sendText(shop.evolutionInstanceId!, fromPhone, outcome.reply)
+        await persistMessage(shop, convo, 'OUTBOUND', 'AI', outcome.reply)
+      } catch (err) {
+        console.error('[pipeline] handleAdminInbound flush error', err)
+      }
+    },
+  )
 }
