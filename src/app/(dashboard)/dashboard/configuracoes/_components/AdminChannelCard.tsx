@@ -158,7 +158,7 @@ export function AdminChannelCard(props: AdminChannelCardProps) {
           >
             <span
               className={[
-                'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm',
+                'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm',
                 'ring-0 transition-transform',
                 notifyOn ? 'translate-x-4' : 'translate-x-0',
               ].join(' ')}

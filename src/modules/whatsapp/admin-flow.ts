@@ -142,9 +142,16 @@ export async function handleAdminTurn(args: {
   }
 
   if (result.data.pendingAction) {
+    const SENSITIVE_ACTION_LABELS: Record<string, string> = {
+      cancelAppointment: 'cancelar o agendamento',
+      blockSchedule: 'bloquear o horário na agenda',
+      unblockSchedule: 'liberar o horário na agenda',
+    }
+    const actionLabel =
+      SENSITIVE_ACTION_LABELS[result.data.pendingAction.toolName] ?? 'esta ação'
     const expiresAt = new Date(now.getTime() + ADMIN_PENDING_TTL_MS)
     return {
-      reply: `Para confirmar «${result.data.pendingAction.summary}», gere um PIN no painel (Configurações → WhatsApp Admin) e envie aqui. Ou responda "cancelar".`,
+      reply: `Para confirmar «${actionLabel}», gere um PIN no painel (Configurações → WhatsApp Admin) e envie aqui. Ou responda "cancelar".`,
       setPending: { actionId: result.data.pendingAction.id, expiresAt },
     }
   }

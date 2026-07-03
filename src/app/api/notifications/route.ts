@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { headers } from 'next/headers'
+import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
@@ -8,6 +9,11 @@ import {
   markRead,
   markAllRead,
 } from '@/modules/notifications/queries'
+
+const MarkBody = z.object({
+  ids: z.array(z.string()).optional(),
+  all: z.boolean().optional(),
+})
 
 export const runtime = 'nodejs'
 
@@ -36,15 +42,18 @@ export async function POST(req: NextRequest) {
   const tenantId = await resolveTenant()
   if (!tenantId) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 })
 
-  let body: { ids?: string[]; all?: boolean }
+  let rawBody: unknown
   try {
-    body = await req.json()
+    rawBody = await req.json()
   } catch {
-    body = {}
+    rawBody = {}
   }
 
-  if (body.all) await markAllRead(tenantId)
-  else if (Array.isArray(body.ids)) await markRead(tenantId, body.ids)
+  const parsed = MarkBody.safeParse(rawBody)
+  const data = parsed.success ? parsed.data : {}
+
+  if (data.all) await markAllRead(tenantId)
+  else if (data.ids && data.ids.length) await markRead(tenantId, data.ids)
 
   return NextResponse.json({ ok: true })
 }
