@@ -3,7 +3,10 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: skip the `postinstall: prisma generate` here — the schema
+# isn't in this stage yet. The builder stage runs `npx prisma generate`
+# explicitly after copying the source.
+RUN npm ci --ignore-scripts
 
 # ─── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
