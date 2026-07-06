@@ -59,6 +59,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/public           ./public
 
 # ── Prisma: schema + migrations (for migrate deploy at startup) ────────────
 COPY --from=builder --chown=nextjs:nodejs /app/prisma           ./prisma
+# Prisma 7 reads the datasource URL for `migrate deploy` from prisma.config.ts
+# (process.env.DATABASE_URL), not the schema's env() — the config must be
+# present in the runner or migrate deploy fails with "datasource.url required".
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 # ── Full dependency set (Prisma CLI for `migrate deploy` at startup) ───────
 # The Next.js standalone trace bundles only imported runtime deps, so the
