@@ -60,14 +60,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/public           ./public
 # ── Prisma: schema + migrations (for migrate deploy at startup) ────────────
 COPY --from=builder --chown=nextjs:nodejs /app/prisma           ./prisma
 
-# ── Prisma packages (CLI + generated client + adapter) ────────────────────
-# The standalone output already bundles runtime deps that were imported
-# (adapter-pg, pg, etc.). We add the CLI and generated client explicitly
-# because the CLI is a devDep (not traced by Next.js) and the generated
-# client lives in node_modules/.prisma (also may not be traced).
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma         ./node_modules/prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma        ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma        ./node_modules/.prisma
+# ── Full dependency set (Prisma CLI for `migrate deploy` at startup) ───────
+# The Next.js standalone trace bundles only imported runtime deps, so the
+# Prisma 7 CLI and its transitive deps (e.g. @prisma/config → `effect`,
+# `empathic`) are missing — `prisma migrate deploy` then fails with
+# "Cannot find module 'effect'". Copy the complete node_modules over the
+# traced one (superset; disk is cheap on a single VPS).
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 # ── Startup script ─────────────────────────────────────────────────────────
 COPY --chown=nextjs:nodejs docker/entrypoint.sh ./entrypoint.sh
