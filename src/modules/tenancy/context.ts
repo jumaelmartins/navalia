@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Barbershop, User } from '@prisma/client'
@@ -90,8 +91,13 @@ export type TenantContext = {
  * Guard server-side: exige sessão válida. Se o usuário ainda não tiver uma
  * barbearia vinculada (primeiro login via Google), auto-provisiona uma
  * barbearia placeholder em vez de redirecionar para /signup.
+ *
+ * Envolto em React `cache()` para deduplicar dentro de uma mesma requisição:
+ * layout e page do dashboard chamam requireMember (via requireOnboarded) em
+ * paralelo, e sem dedupe duas chamadas concorrentes poderiam ambas ver
+ * `barbershop` como null e criar duas barbearias para o mesmo usuário.
  */
-export async function requireMember(): Promise<TenantContext> {
+export const requireMember = cache(async function requireMember(): Promise<TenantContext> {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
 
@@ -108,7 +114,7 @@ export async function requireMember(): Promise<TenantContext> {
   }
 
   return { user: rest, barbershop }
-}
+})
 
 /**
  * Guard server-side: igual a requireMember, mas exige role OWNER.
