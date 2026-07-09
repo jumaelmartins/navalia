@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { slugify, computeTrialEnd } from './context'
+import { slugify, computeTrialEnd, deriveBarbershopName } from './context'
 
 describe('slugify', () => {
   it("converts 'Barbearia do João' to 'barbearia-do-joao'", () => {
@@ -29,6 +29,28 @@ describe('slugify', () => {
 
   it("returns 'barbearia' when all characters are stripped", () => {
     expect(slugify('!!!')).toBe('barbearia')
+  })
+})
+
+describe('deriveBarbershopName', () => {
+  it('uses the first name from a full name', () => {
+    expect(deriveBarbershopName('João Silva')).toBe('Barbearia de João')
+  })
+
+  it('uses a single-word name as-is', () => {
+    expect(deriveBarbershopName('Maria')).toBe('Barbearia de Maria')
+  })
+
+  it('collapses extra whitespace before extracting the first name', () => {
+    expect(deriveBarbershopName('  Pedro   Alves ')).toBe('Barbearia de Pedro')
+  })
+
+  it('falls back to a generic name when empty', () => {
+    expect(deriveBarbershopName('')).toBe('Minha Barbearia')
+  })
+
+  it('falls back to a generic name when only whitespace', () => {
+    expect(deriveBarbershopName('   ')).toBe('Minha Barbearia')
   })
 })
 

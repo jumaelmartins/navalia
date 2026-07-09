@@ -21,6 +21,15 @@ export function slugify(name: string): string {
 }
 
 /**
+ * Deriva um nome padrão de barbearia a partir do nome do usuário (Google
+ * sign-in de tenants novos). Ex.: 'João Silva' → 'Barbearia de João'.
+ */
+export function deriveBarbershopName(userName: string): string {
+  const firstName = userName.trim().split(/\s+/)[0]
+  return firstName ? `Barbearia de ${firstName}` : 'Minha Barbearia'
+}
+
+/**
  * Retorna uma nova Date exatamente 7 dias após `from`. Não muta `from`.
  */
 export function computeTrialEnd(from: Date): Date {
