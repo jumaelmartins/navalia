@@ -52,3 +52,6 @@ evolution-data/
 # sdd scratch
 .superpowers/
 *.log
+
+# git worktrees
+/.worktrees/
