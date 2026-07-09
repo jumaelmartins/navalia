@@ -5,7 +5,7 @@ fits the existing design (see [ARCHITECTURE.md](./ARCHITECTURE.md)).
 
 ## v1.1 — Auth & booking policies
 
-### Google sign-in
+### Google sign-in  ✅ shipped (2026-07-08)
 Better Auth ships a Google OAuth provider — add `socialProviders.google` to
 `src/lib/auth.ts` + button on login/signup. Small.
 

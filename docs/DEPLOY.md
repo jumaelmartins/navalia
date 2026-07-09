@@ -102,6 +102,7 @@ openssl rand -hex 32
 - [ ] `STRIPE_PRICE_ID` — live price ID
 - [ ] `STRIPE_WEBHOOK_SECRET` — `whsec_...` (reveal in Stripe Dashboard after step 7)
 - [ ] `PLAN_PRICE_CENTS` — plan price in cents, e.g. `4490` for R$ 44,90
+- [ ] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — from the Google Cloud Console OAuth Client; confirm its Authorized redirect URI includes `https://<DOMAIN>/api/auth/callback/google`
 - [ ] `OPENAI_API_KEY` — valid key
 - [ ] `OPENAI_MODEL` — e.g. `gpt-4o-mini` (defaults to `gpt-4o-mini` if unset)
 - [ ] `EVOLUTION_API_KEY` — strong random

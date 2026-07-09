@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Barbershop, User } from '@prisma/client'
@@ -21,6 +22,60 @@ export function slugify(name: string): string {
 }
 
 /**
+ * Deriva um nome padrão de barbearia a partir do nome do usuário (Google
+ * sign-in de tenants novos). Ex.: 'João Silva' → 'Barbearia de João'.
+ */
+export function deriveBarbershopName(userName: string): string {
+  const firstName = userName.trim().split(/\s+/)[0]
+  return firstName ? `Barbearia de ${firstName}` : 'Minha Barbearia'
+}
+
+/**
+ * Auto-provisiona uma barbearia placeholder para um usuário autenticado que
+ * ainda não tem uma (primeiro login via Google). Espelha os steps 2-3 de
+ * signUpBarbershop — a barbearia fica renomeável no wizard de onboarding.
+ */
+export async function ensureBarbershop(userId: string, userName: string): Promise<Barbershop> {
+  const name = deriveBarbershopName(userName)
+  const baseSlug = slugify(name)
+  let slug = baseSlug
+  let suffix = 2
+  while (await prisma.barbershop.findUnique({ where: { slug } })) {
+    slug = `${baseSlug}-${suffix++}`
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const barbershop = await tx.barbershop.create({
+      data: {
+        name,
+        slug,
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: computeTrialEnd(new Date()),
+        businessHours: {},
+      },
+    })
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { role: 'OWNER', barbershopId: barbershop.id },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        barbershopId: barbershop.id,
+        userId,
+        action: 'SIGNUP',
+        entity: 'Barbershop',
+        entityId: barbershop.id,
+        payload: { name, slug },
+      },
+    })
+
+    return barbershop
+  })
+}
+
+/**
  * Retorna uma nova Date exatamente 7 dias após `from`. Não muta `from`.
  */
 export function computeTrialEnd(from: Date): Date {
@@ -33,10 +88,17 @@ export type TenantContext = {
 }
 
 /**
- * Guard server-side: exige sessão válida E barbearia vinculada.
- * Sem sessão → redirect('/login'). Sem barbearia → redirect('/signup').
+ * Guard server-side: exige sessão válida. Se o usuário ainda não tiver uma
+ * barbearia vinculada (primeiro login via Google), auto-provisiona uma
+ * barbearia placeholder em vez de redirecionar para /signup.
+ *
+ * Envolto em React `cache()` para deduplicar dentro de uma mesma requisição:
+ * o layout do dashboard chama requireMember diretamente, e a page chama via
+ * requireOnboarded — ambos em paralelo — e sem dedupe duas chamadas
+ * concorrentes poderiam ambas ver `barbershop` como null e criar duas
+ * barbearias para o mesmo usuário.
  */
-export async function requireMember(): Promise<TenantContext> {
+export const requireMember = cache(async function requireMember(): Promise<TenantContext> {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) redirect('/login')
 
@@ -44,11 +106,16 @@ export async function requireMember(): Promise<TenantContext> {
     where: { id: session.user.id },
     include: { barbershop: true },
   })
-  if (!user || !user.barbershop) redirect('/signup')
+  if (!user) redirect('/login')
 
   const { barbershop, ...rest } = user
+  if (!barbershop) {
+    const newBarbershop = await ensureBarbershop(user.id, user.name)
+    return { user: { ...rest, barbershopId: newBarbershop.id }, barbershop: newBarbershop }
+  }
+
   return { user: rest, barbershop }
-}
+})
 
 /**
  * Guard server-side: igual a requireMember, mas exige role OWNER.
