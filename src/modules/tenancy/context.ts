@@ -93,9 +93,10 @@ export type TenantContext = {
  * barbearia placeholder em vez de redirecionar para /signup.
  *
  * Envolto em React `cache()` para deduplicar dentro de uma mesma requisição:
- * layout e page do dashboard chamam requireMember (via requireOnboarded) em
- * paralelo, e sem dedupe duas chamadas concorrentes poderiam ambas ver
- * `barbershop` como null e criar duas barbearias para o mesmo usuário.
+ * o layout do dashboard chama requireMember diretamente, e a page chama via
+ * requireOnboarded — ambos em paralelo — e sem dedupe duas chamadas
+ * concorrentes poderiam ambas ver `barbershop` como null e criar duas
+ * barbearias para o mesmo usuário.
  */
 export const requireMember = cache(async function requireMember(): Promise<TenantContext> {
   const session = await auth.api.getSession({ headers: await headers() })
