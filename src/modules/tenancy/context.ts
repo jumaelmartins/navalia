@@ -30,6 +30,51 @@ export function deriveBarbershopName(userName: string): string {
 }
 
 /**
+ * Auto-provisiona uma barbearia placeholder para um usuário autenticado que
+ * ainda não tem uma (primeiro login via Google). Espelha os steps 2-3 de
+ * signUpBarbershop — a barbearia fica renomeável no wizard de onboarding.
+ */
+export async function ensureBarbershop(userId: string, userName: string): Promise<Barbershop> {
+  const name = deriveBarbershopName(userName)
+  const baseSlug = slugify(name)
+  let slug = baseSlug
+  let suffix = 2
+  while (await prisma.barbershop.findUnique({ where: { slug } })) {
+    slug = `${baseSlug}-${suffix++}`
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const barbershop = await tx.barbershop.create({
+      data: {
+        name,
+        slug,
+        subscriptionStatus: 'TRIALING',
+        trialEndsAt: computeTrialEnd(new Date()),
+        businessHours: {},
+      },
+    })
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { role: 'OWNER', barbershopId: barbershop.id },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        barbershopId: barbershop.id,
+        userId,
+        action: 'SIGNUP',
+        entity: 'Barbershop',
+        entityId: barbershop.id,
+        payload: { name, slug },
+      },
+    })
+
+    return barbershop
+  })
+}
+
+/**
  * Retorna uma nova Date exatamente 7 dias após `from`. Não muta `from`.
  */
 export function computeTrialEnd(from: Date): Date {
@@ -42,8 +87,9 @@ export type TenantContext = {
 }
 
 /**
- * Guard server-side: exige sessão válida E barbearia vinculada.
- * Sem sessão → redirect('/login'). Sem barbearia → redirect('/signup').
+ * Guard server-side: exige sessão válida. Se o usuário ainda não tiver uma
+ * barbearia vinculada (primeiro login via Google), auto-provisiona uma
+ * barbearia placeholder em vez de redirecionar para /signup.
  */
 export async function requireMember(): Promise<TenantContext> {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -53,9 +99,14 @@ export async function requireMember(): Promise<TenantContext> {
     where: { id: session.user.id },
     include: { barbershop: true },
   })
-  if (!user || !user.barbershop) redirect('/signup')
+  if (!user) redirect('/login')
 
   const { barbershop, ...rest } = user
+  if (!barbershop) {
+    const newBarbershop = await ensureBarbershop(user.id, user.name)
+    return { user: { ...rest, barbershopId: newBarbershop.id }, barbershop: newBarbershop }
+  }
+
   return { user: rest, barbershop }
 }
 

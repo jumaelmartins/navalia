@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest'
-import { slugify, computeTrialEnd, deriveBarbershopName } from './context'
+import 'dotenv/config'
+import { describe, it, expect, afterAll } from 'vitest'
+import { prisma } from '@/lib/prisma'
+import { slugify, computeTrialEnd, deriveBarbershopName, ensureBarbershop } from './context'
 
 describe('slugify', () => {
   it("converts 'Barbearia do João' to 'barbearia-do-joao'", () => {
@@ -64,5 +66,60 @@ describe('computeTrialEnd', () => {
     const from = new Date('2026-07-01T12:00:00.000Z')
     computeTrialEnd(from)
     expect(from.toISOString()).toBe('2026-07-01T12:00:00.000Z')
+  })
+})
+
+describe.skipIf(!process.env.DATABASE_URL)('ensureBarbershop (integration)', () => {
+  const cleanupBarbershopIds: string[] = []
+  const cleanupUserIds: string[] = []
+
+  afterAll(async () => {
+    await prisma.auditLog.deleteMany({ where: { barbershopId: { in: cleanupBarbershopIds } } })
+    await prisma.user.deleteMany({ where: { id: { in: cleanupUserIds } } })
+    await prisma.barbershop.deleteMany({ where: { id: { in: cleanupBarbershopIds } } })
+  })
+
+  it('creates a barbershop, links the user as OWNER, and logs the signup', async () => {
+    const user = await prisma.user.create({
+      data: { name: 'Carlos Pereira', email: `carlos-${Date.now()}@example.com` },
+    })
+    cleanupUserIds.push(user.id)
+
+    const barbershop = await ensureBarbershop(user.id, user.name)
+    cleanupBarbershopIds.push(barbershop.id)
+
+    expect(barbershop.name).toBe('Barbearia de Carlos')
+    expect(barbershop.subscriptionStatus).toBe('TRIALING')
+
+    const updatedUser = await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
+    expect(updatedUser.role).toBe('OWNER')
+    expect(updatedUser.barbershopId).toBe(barbershop.id)
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: { barbershopId: barbershop.id, action: 'SIGNUP' },
+    })
+    expect(auditLog).not.toBeNull()
+  })
+
+  it('generates a unique slug when the derived name collides', async () => {
+    const existing = await prisma.barbershop.create({
+      data: {
+        name: 'Barbearia de Ana',
+        slug: 'barbearia-de-ana',
+        trialEndsAt: new Date(),
+        businessHours: {},
+      },
+    })
+    cleanupBarbershopIds.push(existing.id)
+
+    const user = await prisma.user.create({
+      data: { name: 'Ana Costa', email: `ana-${Date.now()}@example.com` },
+    })
+    cleanupUserIds.push(user.id)
+
+    const barbershop = await ensureBarbershop(user.id, user.name)
+    cleanupBarbershopIds.push(barbershop.id)
+
+    expect(barbershop.slug).toBe('barbearia-de-ana-2')
   })
 })
