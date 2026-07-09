@@ -5,7 +5,7 @@ import { AssinaturaClient } from './_components/AssinaturaClient'
 export default async function AssinaturaPage() {
   const { barbershop } = await requireOwner()
 
-  const priceCents = Number(process.env.PLAN_PRICE_CENTS ?? 9900)
+  const priceCents = Number(process.env.PLAN_PRICE_CENTS ?? 4490)
 
   return (
     <Suspense fallback={null}>

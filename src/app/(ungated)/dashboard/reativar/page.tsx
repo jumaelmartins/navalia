@@ -11,7 +11,7 @@ export default async function ReativarPage() {
   const { barbershop } = await requireMember()
 
   const isExpiredTrial = barbershop.subscriptionStatus === 'TRIALING'
-  const priceCents = Number(process.env.PLAN_PRICE_CENTS ?? 9900)
+  const priceCents = Number(process.env.PLAN_PRICE_CENTS ?? 4490)
 
   return (
     <ReativarClient

@@ -32,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const trialEndsAt = barbershop.trialEndsAt
   const isTrialing = barbershop.subscriptionStatus === 'TRIALING'
-  const priceCents = Number(process.env.PLAN_PRICE_CENTS ?? 9900)
+  const priceCents = Number(process.env.PLAN_PRICE_CENTS ?? 4490)
 
   return (
     <div className="min-h-screen bg-background text-foreground">

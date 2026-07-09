@@ -51,7 +51,7 @@ The product is built as a single full-stack Next.js 16 monolith — one reposito
 ### Billing
 
 - 7-day free trial, app-managed, **no card required at signup**
-- Single monthly plan (configurable via `PLAN_PRICE_CENTS`; default R$ 99/month)
+- Single monthly plan (configurable via `PLAN_PRICE_CENTS`; default R$ 44,90/month)
 - Stripe Checkout for subscription start; Stripe Billing Portal for card changes and cancellations
 - Webhook-driven lifecycle (`checkout.session.completed` → `ACTIVE`; `invoice.payment_failed` → `PAST_DUE`; `customer.subscription.deleted` → `CANCELED`); idempotent via `WebhookEvent`
 - Access gate enforced in middleware + layout: `TRIALING` (not expired) or `ACTIVE` required; anything else → reactivation screen; public page returns 404-style "unavailable"

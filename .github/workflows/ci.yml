@@ -52,7 +52,7 @@ jobs:
           STRIPE_SECRET_KEY: sk_test_placeholder
           STRIPE_WEBHOOK_SECRET: whsec_placeholder
           STRIPE_PRICE_ID: price_placeholder
-          PLAN_PRICE_CENTS: "9900"
+          PLAN_PRICE_CENTS: "4490"
           OPENAI_API_KEY: sk-placeholder
           OPENAI_MODEL: gpt-4o-mini
           EVOLUTION_URL: http://localhost:8080

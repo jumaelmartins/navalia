@@ -22,7 +22,7 @@ function formatPrice(cents: number): string {
 }
 
 export default function MarketingPage() {
-  const priceCents = parseInt(process.env.PLAN_PRICE_CENTS ?? '9900', 10)
+  const priceCents = parseInt(process.env.PLAN_PRICE_CENTS ?? '4490', 10)
   const priceDisplay = formatPrice(priceCents)
 
   return (
