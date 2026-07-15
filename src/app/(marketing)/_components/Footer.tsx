@@ -26,6 +26,12 @@ export function Footer() {
             >
               Criar conta
             </Link>
+            <Link
+              href="/privacidade"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Privacidade
+            </Link>
           </nav>
         </div>
 
