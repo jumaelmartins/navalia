@@ -164,6 +164,21 @@ export function ChatWidget({ slug, shopName }: Props) {
               </button>
             </div>
 
+            {/* Privacy notice */}
+            <div className="px-4 py-1.5 border-b border-border shrink-0">
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Atendimento com IA — mensagens podem ser processadas por serviços de terceiros.{' '}
+                <a
+                  href="/privacidade"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Política de Privacidade
+                </a>
+              </p>
+            </div>
+
             {/* Messages list */}
             <div
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0"
