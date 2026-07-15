@@ -216,16 +216,17 @@ model ScheduleBlock {
 }
 
 model Customer {
-  id           String  @id @default(cuid())
-  barbershopId String
-  barbershop   Barbershop @relation(fields: [barbershopId], references: [id])
-  name         String
-  phone        String
-  email        String?
-  notes        String?
-  appointments Appointment[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String  @id @default(cuid())
+  barbershopId     String
+  barbershop       Barbershop @relation(fields: [barbershopId], references: [id])
+  name             String
+  phone            String
+  email            String?
+  notes            String?
+  privacyConsentAt DateTime?
+  appointments     Appointment[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   @@unique([barbershopId, phone])
 }
 
@@ -259,6 +260,7 @@ model WhatsappConversation {
   state                  ConversationState @default(OPEN)
   pendingActionId        String?
   pendingActionExpiresAt DateTime?
+  privacyNoticeSentAt    DateTime?
   lastMessageAt DateTime @default(now())
   messages      WhatsappMessage[]
   createdAt     DateTime @default(now())
