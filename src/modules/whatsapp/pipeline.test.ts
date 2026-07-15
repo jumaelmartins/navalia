@@ -144,8 +144,10 @@ beforeEach(() => {
 
   mockFindUniqueShop.mockResolvedValue(SHOP)
   mockHasAccess.mockReturnValue(true)
-  // Default: conversation is OPEN (used by flushToAI re-read check, I8)
-  mockFindUniqueConv.mockResolvedValue({ state: 'OPEN' })
+  // Default: conversation is OPEN (used by flushToAI re-read check, I8).
+  // privacyNoticeSentAt is non-null so pre-existing tests exercise the
+  // "notice already sent" branch and their exact-reply-text assertions hold.
+  mockFindUniqueConv.mockResolvedValue({ state: 'OPEN', privacyNoticeSentAt: new Date('2020-01-01') })
   mockUpsertConv.mockResolvedValue(OPEN_CONV)
   mockUpdateConv.mockResolvedValue(OPEN_CONV)
   mockCreateMsg.mockResolvedValue({ id: 'wmsg-1' })
@@ -403,6 +405,52 @@ describe('handleInboundMessage: [HUMANO] marker handling', () => {
       ([args]) => args?.data?.state === 'TRANSFERRED_TO_HUMAN',
     )
     expect(humanTransfer).toBeUndefined()
+  })
+})
+
+describe('handleInboundMessage: first-contact privacy notice', () => {
+  it('prepends the privacy notice to the AI reply on a brand-new conversation', async () => {
+    mockFindUniqueConv.mockResolvedValue({ state: 'OPEN', privacyNoticeSentAt: null })
+    mockRunAssistant.mockResolvedValue({
+      ok: true,
+      data: { reply: 'Seus horários disponíveis são às 10h e 14h.' },
+    })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    const [, , sentText] = mockSendText.mock.calls[0] as [string, string, string]
+    expect(sentText).toContain('Política de privacidade')
+    expect(sentText).toContain('/privacidade')
+    expect(sentText).toContain('Seus horários disponíveis são às 10h e 14h.')
+
+    expect(mockUpdateConv).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ privacyNoticeSentAt: expect.any(Date) }),
+      }),
+    )
+  })
+
+  it('does NOT prepend the privacy notice when it was already sent', async () => {
+    mockFindUniqueConv.mockResolvedValue({
+      state: 'OPEN',
+      privacyNoticeSentAt: new Date('2026-07-01'),
+    })
+    mockRunAssistant.mockResolvedValue({
+      ok: true,
+      data: { reply: 'Seus horários disponíveis são às 10h e 14h.' },
+    })
+
+    await handleInboundMessage(BASE_ARGS)
+
+    const [, , sentText] = mockSendText.mock.calls[0] as [string, string, string]
+    expect(sentText).not.toContain('Política de privacidade')
+    expect(sentText).toBe('Seus horários disponíveis são às 10h e 14h.')
+
+    const updateCalls = mockUpdateConv.mock.calls as Array<
+      Array<{ data?: { privacyNoticeSentAt?: unknown } }>
+    >
+    const noticeUpdate = updateCalls.find(([callArgs]) => callArgs?.data?.privacyNoticeSentAt !== undefined)
+    expect(noticeUpdate).toBeUndefined()
   })
 })
 

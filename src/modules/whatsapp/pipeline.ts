@@ -224,6 +224,16 @@ async function persistMessage(
     .catch(err => console.error('[pipeline] persistMessage error', err))
 }
 
+/** One-time LGPD disclosure prepended to the first reply in a new conversation. */
+function buildPrivacyNotice(shopName: string): string {
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '')
+  return (
+    `Olá! Esse é o atendimento automático da ${shopName}, feito com inteligência artificial. ` +
+    `Suas mensagens podem ser processadas por serviços de terceiros. ` +
+    `Política de privacidade: ${baseUrl}/privacidade`
+  )
+}
+
 /**
  * Send a static fallback reply, persist OUTBOUND SYSTEM message,
  * and transition conversation to TRANSFERRED_TO_HUMAN.
@@ -233,17 +243,28 @@ async function sendFallback(
   instanceName: string,
   fromPhone: string,
   conversation: ConvRecord,
+  isFirstContact: boolean,
 ): Promise<void> {
-  // Persist SYSTEM message first (so at least the audit trail exists even if send fails)
-  await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', FALLBACK_REPLY)
+  const text = isFirstContact
+    ? buildPrivacyNotice(shop.name) + '\n\n' + FALLBACK_REPLY
+    : FALLBACK_REPLY
 
-  const sendResult = await evolution.sendText(instanceName, fromPhone, FALLBACK_REPLY)
+  // Persist SYSTEM message first (so at least the audit trail exists even if send fails)
+  await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', text)
+
+  const sendResult = await evolution.sendText(instanceName, fromPhone, text)
   if (!sendResult.ok) {
     console.error('[pipeline] sendText fallback failed', sendResult.error)
   }
 
   await prisma.whatsappConversation
-    .update({ where: { id: conversation.id }, data: { state: 'TRANSFERRED_TO_HUMAN' } })
+    .update({
+      where: { id: conversation.id },
+      data: {
+        state: 'TRANSFERRED_TO_HUMAN',
+        ...(isFirstContact && sendResult.ok ? { privacyNoticeSentAt: new Date() } : {}),
+      },
+    })
     .catch(err => console.error('[pipeline] state→TRANSFERRED error', err))
 }
 
@@ -528,9 +549,15 @@ async function flushToAI({
   // for a human agent to transfer the conversation. If state has changed to
   // TRANSFERRED_TO_HUMAN (or CLOSED), skip the AI call entirely.
   const freshConv = await prisma.whatsappConversation
-    .findUnique({ where: { id: conversation.id }, select: { state: true } })
+    .findUnique({
+      where: { id: conversation.id },
+      select: { state: true, privacyNoticeSentAt: true },
+    })
     .catch(() => null)
   if (!freshConv || freshConv.state !== 'OPEN') return
+
+  // First contact on this conversation — prepend a one-time privacy/IA disclosure.
+  const isFirstContact = freshConv.privacyNoticeSentAt === null
 
   // Merge fragments (multi-message burst) into a single user message
   const userMessage = fragments.join('\n')
@@ -571,7 +598,7 @@ async function flushToAI({
 
   // If OpenAI is not configured, skip AI and send fallback immediately
   if (!isOpenAIConfigured()) {
-    await sendFallback(shop, instanceName, fromPhone, conversation)
+    await sendFallback(shop, instanceName, fromPhone, conversation, isFirstContact)
     return
   }
 
@@ -609,7 +636,7 @@ async function flushToAI({
 
   if (!result.ok) {
     console.error('[pipeline] runAssistant error', result.error)
-    await sendFallback(shop, instanceName, fromPhone, conversation)
+    await sendFallback(shop, instanceName, fromPhone, conversation, isFirstContact)
     return
   }
 
@@ -623,6 +650,10 @@ async function flushToAI({
     isHumanHandoff = true
   }
 
+  if (isFirstContact) {
+    reply = buildPrivacyNotice(shop.name) + '\n\n' + reply
+  }
+
   // Send via Evolution FIRST — persist only after knowing the delivery outcome.
   const sendResult = await evolution.sendText(instanceName, fromPhone, reply)
   if (sendResult.ok) {
@@ -632,14 +663,15 @@ async function flushToAI({
     await persistMessage(shop, conversation, 'OUTBOUND', 'SYSTEM', '[FALHA NO ENVIO] ' + reply)
   }
 
-  // Transition state when human handoff is requested
-  if (isHumanHandoff) {
+  // Transition state when human handoff is requested; mark the privacy notice
+  // as sent once delivery succeeds, so it's shown exactly once per conversation.
+  const conversationUpdate: { state?: 'TRANSFERRED_TO_HUMAN'; privacyNoticeSentAt?: Date } = {}
+  if (isHumanHandoff) conversationUpdate.state = 'TRANSFERRED_TO_HUMAN'
+  if (isFirstContact && sendResult.ok) conversationUpdate.privacyNoticeSentAt = new Date()
+  if (Object.keys(conversationUpdate).length > 0) {
     await prisma.whatsappConversation
-      .update({
-        where: { id: conversation.id },
-        data: { state: 'TRANSFERRED_TO_HUMAN' },
-      })
-      .catch(err => console.error('[pipeline] state→TRANSFERRED error', err))
+      .update({ where: { id: conversation.id }, data: conversationUpdate })
+      .catch(err => console.error('[pipeline] conversation update error', err))
   }
 }
 
