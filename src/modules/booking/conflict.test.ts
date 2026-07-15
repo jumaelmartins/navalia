@@ -87,6 +87,7 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
     startTime,
     customer,
     source: 'ADMIN' as const,
+    consent: true,
   })
 
   it('(a) creates a valid appointment at 10:00', async () => {
@@ -277,5 +278,61 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe('INVALID_PHONE')
+  })
+
+  it('(k) PUBLIC_PAGE source without consent → CONSENT_REQUIRED', async () => {
+    const result = await createAppointment({
+      ...base('15:15'),
+      source: 'PUBLIC_PAGE',
+      consent: false,
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('CONSENT_REQUIRED')
+  })
+
+  it('(l) ADMIN source without consent still succeeds (gate only applies to PUBLIC_PAGE)', async () => {
+    const result = await createAppointment({
+      tenantId: barbershopId,
+      serviceId,
+      professionalId,
+      date: TEST_DATE,
+      startTime: '15:30',
+      customer,
+      source: 'ADMIN',
+    })
+    expect(result.ok).toBe(true)
+  })
+
+  it('(m) PUBLIC_PAGE booking with consent sets privacyConsentAt; a repeat booking does not overwrite it', async () => {
+    const uniquePhone = '11955550001'
+    // normalizePhone() prefixes 10/11-digit BR numbers with '55' before storing.
+    const normalizedPhone = '55' + uniquePhone
+
+    const first = await createAppointment({
+      ...base('16:00'),
+      source: 'PUBLIC_PAGE',
+      consent: true,
+      customer: { name: 'Consent Tester', phone: uniquePhone },
+    })
+    expect(first.ok).toBe(true)
+
+    const afterFirst = await prisma.customer.findUnique({
+      where: { barbershopId_phone: { barbershopId, phone: normalizedPhone } },
+    })
+    expect(afterFirst?.privacyConsentAt).not.toBeNull()
+    const consentAt = afterFirst!.privacyConsentAt!.getTime()
+
+    const second = await createAppointment({
+      ...base('16:30'),
+      source: 'PUBLIC_PAGE',
+      consent: true,
+      customer: { name: 'Consent Tester', phone: uniquePhone },
+    })
+    expect(second.ok).toBe(true)
+
+    const afterSecond = await prisma.customer.findUnique({
+      where: { barbershopId_phone: { barbershopId, phone: normalizedPhone } },
+    })
+    expect(afterSecond?.privacyConsentAt?.getTime()).toBe(consentAt)
   })
 })

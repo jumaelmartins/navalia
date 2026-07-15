@@ -24,6 +24,7 @@ export type BookingError =
   | 'OUTSIDE_AVAILABILITY'
   | 'INVALID_PHONE'
   | 'NOT_FOUND'
+  | 'CONSENT_REQUIRED'
 
 /** Single source of truth for pt-BR booking error messages. */
 export const BOOKING_ERROR_PT_BR: Record<BookingError, string> = {
@@ -33,6 +34,7 @@ export const BOOKING_ERROR_PT_BR: Record<BookingError, string> = {
   OUTSIDE_AVAILABILITY: 'Horário fora da disponibilidade.',
   INVALID_PHONE: 'Telefone inválido.',
   NOT_FOUND: 'Agendamento não encontrado.',
+  CONSENT_REQUIRED: 'Você precisa concordar com a Política de Privacidade para continuar.',
 }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: BookingError }

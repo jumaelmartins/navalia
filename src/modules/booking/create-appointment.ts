@@ -169,6 +169,7 @@ export async function createAppointment(args: {
   startTime: string
   customer: { name: string; phone: string; email?: string }
   source: AppointmentSource
+  consent?: boolean
 }): Promise<
   Result<{
     appointmentId: string
@@ -179,6 +180,11 @@ export async function createAppointment(args: {
 > {
   // Validate canonical date before entering the transaction (C1)
   if (!isCanonicalDate(args.date)) return { ok: false, error: 'OUTSIDE_AVAILABILITY' }
+
+  // Public bookings must record consent before anything else happens.
+  if (args.source === 'PUBLIC_PAGE' && !args.consent) {
+    return { ok: false, error: 'CONSENT_REQUIRED' }
+  }
 
   // Fix 3: Validate phone before entering the transaction
   const phone = normalizePhone(args.customer.phone)
@@ -284,6 +290,7 @@ export async function createAppointment(args: {
             name: args.customer.name,
             phone,
             email: args.customer.email,
+            privacyConsentAt: args.consent ? new Date() : undefined,
           },
           update: { name: args.customer.name },
         })

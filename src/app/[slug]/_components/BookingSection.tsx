@@ -117,6 +117,7 @@ export function BookingSection({ shop }: Props) {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
+  const [consentAccepted, setConsentAccepted] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -247,6 +248,10 @@ export function BookingSection({ shop }: Props) {
       setFormError('Informe seu telefone.')
       return
     }
+    if (!consentAccepted) {
+      setFormError('Você precisa concordar com a Política de Privacidade para continuar.')
+      return
+    }
 
     startTransition(async () => {
       const result = await createPublicAppointment({
@@ -260,6 +265,7 @@ export function BookingSection({ shop }: Props) {
           phone: customerPhone.trim(),
           email: customerEmail.trim() || undefined,
         },
+        consent: consentAccepted,
       })
 
       if (!result.ok) {
@@ -640,6 +646,32 @@ export function BookingSection({ shop }: Props) {
                 placeholder="voce@exemplo.com"
                 disabled={isPending}
               />
+            </div>
+
+            <div className="flex items-start gap-2">
+              <input
+                id="booking-consent"
+                type="checkbox"
+                checked={consentAccepted}
+                onChange={e => setConsentAccepted(e.target.checked)}
+                disabled={isPending}
+                className="mt-0.5 h-4 w-4 rounded border-border"
+              />
+              <Label
+                htmlFor="booking-consent"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Li e concordo com a{' '}
+                <a
+                  href="/privacidade"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  Política de Privacidade
+                </a>
+                .
+              </Label>
             </div>
 
             {formError && (

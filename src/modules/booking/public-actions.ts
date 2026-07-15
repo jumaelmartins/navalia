@@ -176,6 +176,7 @@ export async function createPublicAppointment(args: {
   date: string
   startTime: string
   customer: { name: string; phone: string; email?: string }
+  consent: boolean
 }): Promise<AppointmentResult> {
   try {
     const shop = await prisma.barbershop.findUnique({
@@ -200,6 +201,7 @@ export async function createPublicAppointment(args: {
       startTime: args.startTime,
       customer: args.customer,
       source: 'PUBLIC_PAGE',
+      consent: args.consent,
     })
 
     if (!result.ok) {
