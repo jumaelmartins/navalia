@@ -218,10 +218,28 @@ To update manually (fallback, or for a one-off out-of-band change):
 
 ```bash
 git pull
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build app
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.local.yml --env-file .env.prod up -d --build app
 ```
 
 Entrypoint runs prisma migrate deploy on startup — no separate migration step needed
+
+**`docker-compose.prod.local.yml`** is a VPS-only file (never committed, lives
+only at `${DEPLOY_PATH}/docker-compose.prod.local.yml`). This VPS is shared
+with other apps behind a host-level nginx + Certbot reverse proxy — Caddy
+(defined in `docker-compose.prod.yml`) is not actually used for TLS/routing
+on this host. The local file publishes the app container to a host-only
+port nginx proxies to:
+
+```yaml
+services:
+  app:
+    ports:
+      - "127.0.0.1:3100:3000"
+```
+
+Always pass **both** `-f` flags together — omitting the second one silently
+drops this port mapping on the next `up`, and the site 502s even though the
+app container is healthy.
 
 ### Restart a service
 

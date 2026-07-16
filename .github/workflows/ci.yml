@@ -83,4 +83,4 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
             git pull
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build app
+            docker compose -f docker-compose.prod.yml -f docker-compose.prod.local.yml --env-file .env.prod up -d --build app
