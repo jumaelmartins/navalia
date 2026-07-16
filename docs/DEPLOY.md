@@ -206,11 +206,22 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f evolution
 
 ### Update the app
 
+**This now happens automatically** — every push to `main` that passes CI
+triggers the `deploy` job in `.github/workflows/ci.yml`, which runs the
+exact commands below over SSH. No manual step needed for a normal update.
+
+The automated job requires four repo secrets to be set once, in GitHub
+under **Settings → Secrets and variables → Actions**: `DEPLOY_SSH_KEY`,
+`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`.
+
+To update manually (fallback, or for a one-off out-of-band change):
+
 ```bash
 git pull
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build app
-# Entrypoint runs prisma migrate deploy on startup — no separate migration step needed
 ```
+
+Entrypoint runs prisma migrate deploy on startup — no separate migration step needed
 
 ### Restart a service
 
