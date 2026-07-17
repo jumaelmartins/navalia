@@ -570,6 +570,7 @@ git commit -m "feat(db): add nullable Customer.cpf, make it the unique tenant id
 - Modify: `src/modules/booking/create-appointment.ts:164-372`
 - Modify: `src/modules/booking/booking-shared.ts:18-33` (comment only)
 - Modify: `src/modules/booking/conflict.test.ts` (fixtures + new tests)
+- Modify: `src/modules/insights/queries.test.ts` (fixture — see Step 7 below)
 
 **Interfaces:**
 - Consumes: `normalizeCpf`, `isValidCpf` from `@/modules/tenancy/cpf` (Task 3).
@@ -803,10 +804,34 @@ In `src/modules/booking/booking-shared.ts`, update the comment above the `P2002`
 Run: `npm test -- conflict.test.ts` and `npm run typecheck`
 Expected: PASS on all tests (a)–(p), no type errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Fix `queries.test.ts`'s fixture (added by Task 2, predates CPF)**
+
+Task 2 added an integration test to `src/modules/insights/queries.test.ts` that calls
+`createAppointment` with a `customer` object that has no `cpf` — it couldn't, since
+this task is what adds the `cpf` field to `createAppointment`'s type. Now that
+`customer.cpf` is required, that fixture needs it too or it will fail to typecheck.
+
+In `src/modules/insights/queries.test.ts`, find the two `customer:` object literals
+(currently `customer: { name: 'Cliente Confirmado', phone: '11987654321' }` and
+`customer: { name: 'Cliente Concluido', phone: '11987654322' }`) and add a valid `cpf`
+to each:
+
+```ts
+      customer: { name: 'Cliente Confirmado', cpf: '11144477735', phone: '11987654321' },
+```
+
+```ts
+      customer: { name: 'Cliente Concluido', cpf: '52998224725', phone: '11987654322' },
+```
+
+Run: `npm test -- queries.test.ts`
+Expected: PASS (the `getDashboardKpis revenue split` test from Task 2 still passes —
+CPF has no bearing on revenue totals, this is purely a type-completeness fix).
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/modules/booking/types.ts src/modules/booking/create-appointment.ts src/modules/booking/booking-shared.ts src/modules/booking/conflict.test.ts
+git add src/modules/booking/types.ts src/modules/booking/create-appointment.ts src/modules/booking/booking-shared.ts src/modules/booking/conflict.test.ts src/modules/insights/queries.test.ts
 git commit -m "feat(booking): require CPF, identify customers by CPF, gate bookings until legacy customers are migrated"
 ```
 
