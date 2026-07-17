@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma'
 
 let barbershopId: string
 let customerAId: string
-let customerBId: string
 
 // saveCustomerCpf resolves the tenant via requireOnboarded(), which reads a
 // real auth session (headers/cookies) — unavailable outside a request. Mock
@@ -44,10 +43,9 @@ describe.skipIf(!process.env.DATABASE_URL)('saveCustomerCpf (integration)', () =
     })
     customerAId = a.id
 
-    const b = await prisma.customer.create({
+    await prisma.customer.create({
       data: { barbershopId, name: 'Cliente B', phone: '11922222222', cpf: '52998224725' },
     })
-    customerBId = b.id
   })
 
   afterAll(async () => {
