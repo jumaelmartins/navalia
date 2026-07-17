@@ -207,6 +207,7 @@ describe('(b) createAppointment confirmed:false → NEEDS_CONFIRMATION, engine n
         date: '2026-08-01',
         startTime: '10:00',
         customerName: 'João',
+        customerCpf: '11144477735',
         customerPhone: '11999990001',
         confirmed: false,
       }),
@@ -435,6 +436,7 @@ describe('(g) WHATSAPP channel forces ctx.customerPhone', () => {
         date: '2026-08-01',
         startTime: '10:00',
         customerName: 'João',
+        customerCpf: '11144477735',
         customerPhone: '5511000000000', // model-supplied — should be IGNORED
         confirmed: true,
       }),
@@ -516,6 +518,7 @@ describe('(i) createAppointment with invalid confirmed type', () => {
         date: '2026-08-01',
         startTime: '10:00',
         customerName: 'João',
+        customerCpf: '11144477735',
         customerPhone: '11999990001',
         confirmed: 'true', // STRING, not boolean
       }),
