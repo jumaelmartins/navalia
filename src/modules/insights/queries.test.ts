@@ -179,14 +179,19 @@ describe.skipIf(!process.env.DATABASE_URL)('getDashboardKpis revenue split', () 
       data: {
         name: 'Test Revenue Shop',
         slug: `test-revenue-${Date.now()}`,
+        // Wide-open hours (matches the professional's 00:00-23:59 availability
+        // rule below) so this fixture never depends on what time of day the
+        // suite happens to run — a fixed 08:00-18:00 window previously made
+        // this test fail deterministically whenever run after shop-local
+        // closing time.
         businessHours: {
-          '0': { start: '08:00', end: '18:00' },
-          '1': { start: '08:00', end: '18:00' },
-          '2': { start: '08:00', end: '18:00' },
-          '3': { start: '08:00', end: '18:00' },
-          '4': { start: '08:00', end: '18:00' },
-          '5': { start: '08:00', end: '18:00' },
-          '6': { start: '08:00', end: '18:00' },
+          '0': { start: '00:00', end: '23:59' },
+          '1': { start: '00:00', end: '23:59' },
+          '2': { start: '00:00', end: '23:59' },
+          '3': { start: '00:00', end: '23:59' },
+          '4': { start: '00:00', end: '23:59' },
+          '5': { start: '00:00', end: '23:59' },
+          '6': { start: '00:00', end: '23:59' },
         },
         timezone: 'America/Bahia',
         trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
