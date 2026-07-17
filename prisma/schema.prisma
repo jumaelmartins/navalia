@@ -73,13 +73,13 @@ model Barbershop {
   notifyOwnerWhatsapp Boolean   @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
-  users         User[]
-  professionals Professional[]
-  services      Service[]
-  customers     Customer[]
+  users              User[]
+  professionals      Professional[]
+  services           Service[]
+  customers          Customer[]
   phoneVerifications PhoneVerification[]
-  appointments  Appointment[]
-  notifications Notification[]
+  appointments       Appointment[]
+  notifications      Notification[]
 }
 
 model User {
