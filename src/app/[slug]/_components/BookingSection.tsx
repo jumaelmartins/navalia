@@ -15,6 +15,7 @@ import {
 } from '@/modules/booking/public-actions'
 import { buildWhatsAppLink } from '@/modules/whatsapp/deep-link'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
+import { normalizeCpf, isValidCpf } from '@/modules/tenancy/cpf'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -116,6 +117,7 @@ export function BookingSection({ shop }: Props) {
   // Customer form
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [customerCpf, setCustomerCpf] = useState('')
   const [customerEmail, setCustomerEmail] = useState('')
   const [consentAccepted, setConsentAccepted] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -248,6 +250,15 @@ export function BookingSection({ shop }: Props) {
       setFormError('Informe seu telefone.')
       return
     }
+    if (!customerCpf.trim()) {
+      setFormError('Informe seu CPF.')
+      return
+    }
+    const normalizedCpf = normalizeCpf(customerCpf)
+    if (!normalizedCpf || !isValidCpf(normalizedCpf)) {
+      setFormError('CPF inválido. Verifique os números digitados.')
+      return
+    }
     if (!consentAccepted) {
       setFormError('Você precisa concordar com a Política de Privacidade para continuar.')
       return
@@ -262,6 +273,7 @@ export function BookingSection({ shop }: Props) {
         startTime: selectedSlot,
         customer: {
           name: customerName.trim(),
+          cpf: normalizedCpf,
           phone: customerPhone.trim(),
           email: customerEmail.trim() || undefined,
         },
@@ -617,6 +629,18 @@ export function BookingSection({ shop }: Props) {
                 value={customerName}
                 onChange={e => setCustomerName(e.target.value)}
                 placeholder="Seu nome completo"
+                disabled={isPending}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="booking-cpf">CPF *</Label>
+              <Input
+                id="booking-cpf"
+                required
+                value={customerCpf}
+                onChange={e => setCustomerCpf(e.target.value)}
+                placeholder="000.000.000-00"
                 disabled={isPending}
               />
             </div>
