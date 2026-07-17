@@ -164,6 +164,7 @@ export function BookingSection({ shop }: Props) {
     if (!normalized || !isValidCpf(normalized) || !customerPhone.trim()) {
       setPhoneVerified(null)
       setVerificationSent(null)
+      setCheckingVerification(false)
       return
     }
 
