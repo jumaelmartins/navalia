@@ -9,7 +9,7 @@ import { BOOKING_ERROR_PT_BR } from './types'
 // Access rule helper — delegates to billing gate (single source of truth)
 // ---------------------------------------------------------------------------
 
-function isShopAccessible(shop: {
+export function isShopAccessible(shop: {
   onboardingCompleted: boolean
   subscriptionStatus: Parameters<typeof hasAccess>[0]['subscriptionStatus']
   trialEndsAt: Date
