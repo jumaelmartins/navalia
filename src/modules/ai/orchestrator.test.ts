@@ -12,6 +12,12 @@
  * (e) Iteration cap → fallback reply
  * (f) Sensitive tool → pendingAction returned, execute NOT called, log PENDING_CONFIRMATION
  * (g) WHATSAPP channel forces ctx.customerPhone (engine receives ctx phone, not model arg)
+ * (h) Unknown-tool-name call → AiActionLog ERROR row written
+ * (i) createAppointment with confirmed: "true" (string) → validation error
+ * (j) createAppointment missing customerCpf → Zod validation error, engine not called
+ * (k) createAppointment malformed/checksum-failing CPF → pre-engine rejection, engine not called
+ * (l) Engine returns INVALID_CPF → mapEngineError phrasing surfaced to model
+ * (m) Engine returns CPF_MIGRATION_REQUIRED → distinct mapEngineError phrasing surfaced
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -207,6 +213,7 @@ describe('(b) createAppointment confirmed:false → NEEDS_CONFIRMATION, engine n
         date: '2026-08-01',
         startTime: '10:00',
         customerName: 'João',
+        customerCpf: '11144477735',
         customerPhone: '11999990001',
         confirmed: false,
       }),
@@ -435,6 +442,7 @@ describe('(g) WHATSAPP channel forces ctx.customerPhone', () => {
         date: '2026-08-01',
         startTime: '10:00',
         customerName: 'João',
+        customerCpf: '11144477735',
         customerPhone: '5511000000000', // model-supplied — should be IGNORED
         confirmed: true,
       }),
@@ -516,6 +524,7 @@ describe('(i) createAppointment with invalid confirmed type', () => {
         date: '2026-08-01',
         startTime: '10:00',
         customerName: 'João',
+        customerCpf: '11144477735',
         customerPhone: '11999990001',
         confirmed: 'true', // STRING, not boolean
       }),
@@ -553,6 +562,252 @@ describe('(i) createAppointment with invalid confirmed type', () => {
     const messages = secondCall[0].messages as Array<{ role: string; content: string }>
     const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
     expect(toolMsg?.content).toContain('Argumentos inválidos')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (j) createAppointment missing customerCpf → Zod validation error, engine not called
+// ---------------------------------------------------------------------------
+
+describe('(j) createAppointment missing customerCpf → Zod validation error', () => {
+  it('rejects the call before reaching the engine when customerCpf is omitted', async () => {
+    const { buildPublicTools } = await import('./tools/public-tools')
+
+    const tools = buildPublicTools()
+    const createTool = tools.find(t => t.name === 'createAppointment')!
+
+    const client = buildMockClient([
+      toolCallResponse('call-no-cpf', 'createAppointment', {
+        serviceId: 'svc-1',
+        professionalId: 'prof-1',
+        date: '2026-08-01',
+        startTime: '10:00',
+        customerName: 'João',
+        customerPhone: '11999990001',
+        confirmed: true,
+        // customerCpf intentionally omitted
+      }),
+      textResponse('Preciso do CPF do cliente.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Quero agendar',
+      tools: [createTool],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+
+    // Engine must NOT have been called
+    expect(mockEngineCreate).not.toHaveBeenCalled()
+
+    // The tool result message should contain the Zod validation error. Since customerCpf
+    // is the only omitted field, this single issue is Zod's type-check failure for it
+    // (an omitted required string field fails the `z.string()` check itself — before the
+    // `.min(1, 'CPF do cliente é obrigatório')` custom message would ever run, so the raw
+    // Zod message does not literally contain the word "CPF").
+    const secondCall = client.chat.completions.create.mock.calls[1]
+    const messages = secondCall[0].messages as Array<{ role: string; content: string }>
+    const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMsg?.content).toContain(
+      'Argumentos inválidos: Invalid input: expected string, received undefined',
+    )
+  })
+
+  it('rejects an empty-string customerCpf with the CPF-specific required message', async () => {
+    const { buildPublicTools } = await import('./tools/public-tools')
+
+    const tools = buildPublicTools()
+    const createTool = tools.find(t => t.name === 'createAppointment')!
+
+    const client = buildMockClient([
+      toolCallResponse('call-empty-cpf', 'createAppointment', {
+        serviceId: 'svc-1',
+        professionalId: 'prof-1',
+        date: '2026-08-01',
+        startTime: '10:00',
+        customerName: 'João',
+        customerCpf: '', // present but empty — triggers the custom min(1) message
+        customerPhone: '11999990001',
+        confirmed: true,
+      }),
+      textResponse('Preciso do CPF do cliente.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Quero agendar',
+      tools: [createTool],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(mockEngineCreate).not.toHaveBeenCalled()
+
+    const secondCall = client.chat.completions.create.mock.calls[1]
+    const messages = secondCall[0].messages as Array<{ role: string; content: string }>
+    const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMsg?.content).toContain('Argumentos inválidos')
+    expect(toolMsg?.content).toContain('CPF do cliente é obrigatório')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (k) createAppointment with malformed/checksum-failing CPF → pre-engine rejection
+// ---------------------------------------------------------------------------
+
+describe('(k) createAppointment malformed CPF → CPF-invalid error, engine not called', () => {
+  it('rejects a repeated-digit CPF before reaching the engine', async () => {
+    const { buildPublicTools } = await import('./tools/public-tools')
+
+    const tools = buildPublicTools()
+    const createTool = tools.find(t => t.name === 'createAppointment')!
+
+    const client = buildMockClient([
+      toolCallResponse('call-bad-cpf', 'createAppointment', {
+        serviceId: 'svc-1',
+        professionalId: 'prof-1',
+        date: '2026-08-01',
+        startTime: '10:00',
+        customerName: 'João',
+        customerCpf: '11111111111', // fails isValidCpf checksum (repeated digits)
+        customerPhone: '11999990001',
+        confirmed: true,
+      }),
+      textResponse('O CPF informado é inválido.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Quero agendar',
+      tools: [createTool],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+
+    // Engine must NOT have been called — the CPF check short-circuits before the engine call
+    expect(mockEngineCreate).not.toHaveBeenCalled()
+
+    const secondCall = client.chat.completions.create.mock.calls[1]
+    const messages = secondCall[0].messages as Array<{ role: string; content: string }>
+    const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMsg?.content).toContain('CPF inválido')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (l) Engine returns INVALID_CPF → mapEngineError phrasing surfaced to model
+// ---------------------------------------------------------------------------
+
+describe('(l) engine returns INVALID_CPF → mapped error surfaced', () => {
+  it('surfaces the INVALID_CPF mapped error message and calls the engine with a valid CPF', async () => {
+    const { buildPublicTools } = await import('./tools/public-tools')
+
+    const tools = buildPublicTools()
+    const createTool = tools.find(t => t.name === 'createAppointment')!
+
+    mockEngineCreate.mockResolvedValue({ ok: false, error: 'INVALID_CPF' })
+
+    const client = buildMockClient([
+      toolCallResponse('call-engine-invalid-cpf', 'createAppointment', {
+        serviceId: 'svc-1',
+        professionalId: 'prof-1',
+        date: '2026-08-01',
+        startTime: '10:00',
+        customerName: 'João',
+        customerCpf: '11144477735', // valid CPF — the engine itself rejects it
+        customerPhone: '11999990001',
+        confirmed: true,
+      }),
+      textResponse('O CPF não pôde ser validado.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Quero agendar',
+      tools: [createTool],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(mockEngineCreate).toHaveBeenCalledTimes(1)
+
+    const secondCall = client.chat.completions.create.mock.calls[1]
+    const messages = secondCall[0].messages as Array<{ role: string; content: string }>
+    const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMsg?.content).toContain(
+      'CPF inválido. Peça o CPF completo do cliente (11 dígitos) e tente novamente.',
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (m) Engine returns CPF_MIGRATION_REQUIRED → distinct mapped error surfaced
+// ---------------------------------------------------------------------------
+
+describe('(m) engine returns CPF_MIGRATION_REQUIRED → distinct mapped error surfaced', () => {
+  it('surfaces the CPF_MIGRATION_REQUIRED phrasing, telling the model to direct the customer to the shop', async () => {
+    const { buildPublicTools } = await import('./tools/public-tools')
+
+    const tools = buildPublicTools()
+    const createTool = tools.find(t => t.name === 'createAppointment')!
+
+    mockEngineCreate.mockResolvedValue({ ok: false, error: 'CPF_MIGRATION_REQUIRED' })
+
+    const client = buildMockClient([
+      toolCallResponse('call-engine-cpf-migration', 'createAppointment', {
+        serviceId: 'svc-1',
+        professionalId: 'prof-1',
+        date: '2026-08-01',
+        startTime: '10:00',
+        customerName: 'João',
+        customerCpf: '11144477735', // valid CPF — the engine rejects due to migration state
+        customerPhone: '11999990001',
+        confirmed: true,
+      }),
+      textResponse('Agendamento indisponível no momento.'),
+    ])
+
+    const result = await runAssistant({
+      channel: 'AI_WEB',
+      tenantId: 'shop-1',
+      history: [],
+      userMessage: 'Quero agendar',
+      tools: [createTool],
+      systemPrompt: 'Test.',
+      ctx: BASE_CTX,
+      _client: client as unknown as import('openai').default,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(mockEngineCreate).toHaveBeenCalledTimes(1)
+
+    const secondCall = client.chat.completions.create.mock.calls[1]
+    const messages = secondCall[0].messages as Array<{ role: string; content: string }>
+    const toolMsg = messages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMsg?.content).toContain(
+      'Agendamento indisponível no momento. Informe ao cliente que não é possível agendar agora e oriente-o a entrar em contato diretamente com a barbearia.',
+    )
+    // Distinct from INVALID_CPF phrasing, and not the admin-actionable dashboard phrasing
+    expect(toolMsg?.content).not.toContain('Peça o CPF completo')
   })
 })
 

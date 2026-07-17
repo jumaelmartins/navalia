@@ -118,7 +118,7 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <Card className="shadow-sm">
+    <Card className="min-w-0 shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardDescription className="text-xs font-medium uppercase tracking-wider">
@@ -128,7 +128,12 @@ function KpiCard({
         </div>
       </CardHeader>
       <CardContent>
-        <span className="font-display text-4xl font-semibold text-primary">{value}</span>
+        <span
+          className="block truncate font-display text-2xl font-semibold text-primary sm:text-3xl"
+          title={value}
+        >
+          {value}
+        </span>
         {subtitle && (
           <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         )}
@@ -300,7 +305,7 @@ export default async function DashboardPage() {
       {/* KPI cards */}
       <section>
         <h2 className="mb-4 text-base font-semibold text-foreground">Visão geral</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <KpiCard
             title="Hoje"
             value={String(kpis.todayCount)}
@@ -314,18 +319,6 @@ export default async function DashboardPage() {
             icon={TrendingUpIcon}
           />
           <KpiCard
-            title="Receita hoje"
-            value={formatCentsToBRL(kpis.todayRevenueCents)}
-            subtitle="confirmados + concluídos"
-            icon={TrendingUpIcon}
-          />
-          <KpiCard
-            title="Receita semana"
-            value={formatCentsToBRL(kpis.weekRevenueCents)}
-            subtitle="confirmados + concluídos"
-            icon={TrendingUpIcon}
-          />
-          <KpiCard
             title="Ocupação"
             value={`${kpis.occupancyPct}%`}
             subtitle="da semana atual"
@@ -336,6 +329,30 @@ export default async function DashboardPage() {
             value={`${kpis.noShowRate}%`}
             subtitle="últimos 30 dias"
             icon={AlertTriangleIcon}
+          />
+          <KpiCard
+            title="Receita prevista hoje"
+            value={formatCentsToBRL(kpis.todayRevenueCents)}
+            subtitle="confirmados + concluídos"
+            icon={TrendingUpIcon}
+          />
+          <KpiCard
+            title="Receita prevista semana"
+            value={formatCentsToBRL(kpis.weekRevenueCents)}
+            subtitle="confirmados + concluídos"
+            icon={TrendingUpIcon}
+          />
+          <KpiCard
+            title="Receita realizada hoje"
+            value={formatCentsToBRL(kpis.todayRevenueRealizedCents)}
+            subtitle="somente concluídos"
+            icon={TrendingUpIcon}
+          />
+          <KpiCard
+            title="Receita realizada semana"
+            value={formatCentsToBRL(kpis.weekRevenueRealizedCents)}
+            subtitle="somente concluídos"
+            icon={TrendingUpIcon}
           />
         </div>
       </section>

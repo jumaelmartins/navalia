@@ -221,13 +221,15 @@ model Customer {
   barbershop       Barbershop @relation(fields: [barbershopId], references: [id])
   name             String
   phone            String
+  cpf              String?
   email            String?
   notes            String?
   privacyConsentAt DateTime?
   appointments     Appointment[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
-  @@unique([barbershopId, phone])
+  @@unique([barbershopId, cpf])
+  @@index([barbershopId, phone])
 }
 
 model Appointment {

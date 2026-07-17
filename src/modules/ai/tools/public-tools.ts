@@ -7,6 +7,7 @@ import {
   cancelAppointment as engineCancelAppointment,
 } from '@/modules/booking/create-appointment'
 import { resolveProfessionalByName } from './resolve-professional'
+import { normalizeCpf, isValidCpf } from '@/modules/tenancy/cpf'
 import type { ToolDef, ToolCtx } from '../types'
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,10 @@ function mapEngineError(error: string): string {
       return 'Número de telefone inválido. Informe um número com DDD (10 a 13 dígitos).'
     case 'NOT_FOUND':
       return 'Agendamento não encontrado.'
+    case 'INVALID_CPF':
+      return 'CPF inválido. Peça o CPF completo do cliente (11 dígitos) e tente novamente.'
+    case 'CPF_MIGRATION_REQUIRED':
+      return 'Agendamento indisponível no momento. Informe ao cliente que não é possível agendar agora e oriente-o a entrar em contato diretamente com a barbearia.'
     default:
       return 'Erro ao processar a solicitação. Por favor, tente novamente.'
   }
@@ -236,6 +241,10 @@ export function buildPublicTools(): ToolDef[] {
           date: { type: 'string', description: 'Data no formato YYYY-MM-DD' },
           startTime: { type: 'string', description: 'Horário de início no formato HH:mm' },
           customerName: { type: 'string', description: 'Nome do cliente' },
+          customerCpf: {
+            type: 'string',
+            description: 'CPF do cliente, 11 dígitos, com ou sem pontuação (sempre obrigatório)',
+          },
           customerPhone: {
             type: 'string',
             description: 'Telefone do cliente com DDD (obrigatório no canal AI_WEB)',
@@ -252,6 +261,7 @@ export function buildPublicTools(): ToolDef[] {
           'date',
           'startTime',
           'customerName',
+          'customerCpf',
           'confirmed',
         ],
       },
@@ -266,6 +276,7 @@ export function buildPublicTools(): ToolDef[] {
             .string()
             .regex(/^\d{2}:\d{2}$/, 'Horário deve estar no formato HH:mm'),
           customerName: z.string().min(1, 'Nome do cliente é obrigatório'),
+          customerCpf: z.string().min(1, 'CPF do cliente é obrigatório'),
           customerPhone: z.string().optional(),
           confirmed: z.boolean(),
         })
@@ -284,6 +295,13 @@ export function buildPublicTools(): ToolDef[] {
             error:
               'NEEDS_CONFIRMATION — faça um resumo dos detalhes (serviço, data, hora, profissional) e aguarde a confirmação explícita do cliente antes de agendar.',
             _requiresConfirmation: true as const,
+          }
+        }
+
+        const cpf = normalizeCpf(parsed.data.customerCpf)
+        if (cpf === null || !isValidCpf(cpf)) {
+          return {
+            error: 'CPF inválido. Peça o CPF completo do cliente (11 dígitos) e tente novamente.',
           }
         }
 
@@ -321,7 +339,7 @@ export function buildPublicTools(): ToolDef[] {
             professionalId,
             date,
             startTime,
-            customer: { name: customerName, phone },
+            customer: { name: customerName, cpf, phone },
             source,
           })
 

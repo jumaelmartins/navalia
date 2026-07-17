@@ -3,6 +3,7 @@ import type { AppointmentSource, Result } from './types'
 import { addMinutes, computeSlots, isCanonicalDate } from './slots'
 import { dateToWeekday, isRetryableError, type BizHoursMap } from './booking-shared'
 import { pushNewAppointmentToOwner } from '@/modules/notifications/push'
+import { normalizeCpf, isValidCpf } from '@/modules/tenancy/cpf'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -167,7 +168,7 @@ export async function createAppointment(args: {
   professionalId: string
   date: string
   startTime: string
-  customer: { name: string; phone: string; email?: string }
+  customer: { name: string; cpf: string; phone: string; email?: string }
   source: AppointmentSource
   consent?: boolean
 }): Promise<
@@ -181,6 +182,13 @@ export async function createAppointment(args: {
   // Validate canonical date before entering the transaction (C1)
   if (!isCanonicalDate(args.date)) return { ok: false, error: 'OUTSIDE_AVAILABILITY' }
 
+  // Migration gate: every existing customer of this tenant must have a CPF
+  // on file before any new appointment (any channel) can be created.
+  const pendingCpfCount = await prisma.customer.count({
+    where: { barbershopId: args.tenantId, cpf: null },
+  })
+  if (pendingCpfCount > 0) return { ok: false, error: 'CPF_MIGRATION_REQUIRED' }
+
   // Public bookings must record consent before anything else happens.
   if (args.source === 'PUBLIC_PAGE' && !args.consent) {
     return { ok: false, error: 'CONSENT_REQUIRED' }
@@ -189,6 +197,9 @@ export async function createAppointment(args: {
   // Fix 3: Validate phone before entering the transaction
   const phone = normalizePhone(args.customer.phone)
   if (phone === null) return { ok: false, error: 'INVALID_PHONE' }
+
+  const cpf = normalizeCpf(args.customer.cpf)
+  if (cpf === null || !isValidCpf(cpf)) return { ok: false, error: 'INVALID_CPF' }
 
   const runTx = async () =>
     prisma.$transaction(
@@ -282,17 +293,18 @@ export async function createAppointment(args: {
           return { ok: false as const, error: 'SLOT_TAKEN' as const }
         }
 
-        // --- 5. Upsert customer (barbershopId + normalised phone) ---
+        // --- 5. Upsert customer (barbershopId + normalised CPF) ---
         const customer = await tx.customer.upsert({
-          where: { barbershopId_phone: { barbershopId: args.tenantId, phone } },
+          where: { barbershopId_cpf: { barbershopId: args.tenantId, cpf } },
           create: {
             barbershopId: args.tenantId,
             name: args.customer.name,
+            cpf,
             phone,
             email: args.customer.email,
             privacyConsentAt: args.consent ? new Date() : undefined,
           },
-          update: { name: args.customer.name },
+          update: { name: args.customer.name, phone },
         })
 
         // --- 6. Create appointment (always CONFIRMED) ---

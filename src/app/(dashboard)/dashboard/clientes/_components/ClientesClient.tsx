@@ -24,7 +24,8 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
-import { saveCustomerNotes } from '../actions'
+import { normalizeCpf, isValidCpf, formatCpf } from '@/modules/tenancy/cpf'
+import { saveCustomerNotes, saveCustomerCpf } from '../actions'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +35,7 @@ export type CustomerRow = {
   id: string
   name: string
   phone: string
+  cpf: string | null
   notes: string | null
   lastVisit: string | null   // "YYYY-MM-DD" or null
   totalSpentCents: number
@@ -88,6 +90,46 @@ function formatDate(date: string): string {
 // ---------------------------------------------------------------------------
 // Customer detail sheet
 // ---------------------------------------------------------------------------
+
+function CustomerCpfEditor({ customer }: { customer: CustomerRow }) {
+  const [cpfInput, setCpfInput] = useState(customer.cpf ? formatCpf(customer.cpf) : '')
+  const [pending, startTransition] = useTransition()
+
+  function handleSave() {
+    const normalized = normalizeCpf(cpfInput)
+    if (!normalized || !isValidCpf(normalized)) {
+      toast.error('CPF inválido. Verifique os números digitados.')
+      return
+    }
+    startTransition(async () => {
+      const res = await saveCustomerCpf(customer.id, normalized)
+      if (!res.ok) toast.error(res.error)
+      else toast.success('CPF salvo.')
+    })
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">CPF</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          value={cpfInput}
+          onChange={e => setCpfInput(e.target.value)}
+          placeholder="000.000.000-00"
+          disabled={pending}
+        />
+        <Button size="sm" onClick={handleSave} disabled={pending} className="shrink-0 hover:bg-primary-hover">
+          {pending ? 'Salvando…' : 'Salvar'}
+        </Button>
+      </div>
+      {!customer.cpf && (
+        <Badge className="text-xs bg-[var(--status-pending)] text-[var(--status-pending-fg)]">
+          CPF pendente
+        </Badge>
+      )}
+    </div>
+  )
+}
 
 function CustomerSheet({
   customer,
@@ -168,6 +210,9 @@ function CustomerSheet({
             </Button>
           </div>
 
+          {/* CPF */}
+          <CustomerCpfEditor customer={customer} />
+
           {/* Appointment history */}
           <div className="space-y-2">
             <p className="text-sm font-medium">Histórico de agendamentos</p>
@@ -237,6 +282,13 @@ export function ClientesClient({ customers }: { customers: CustomerRow[] }) {
         </div>
       </div>
 
+      {/* Pending-CPF banner */}
+      {customers.some(c => !c.cpf) && (
+        <div className="rounded-lg border border-[var(--status-pending)] bg-[var(--status-pending)]/10 px-4 py-3 text-sm text-foreground">
+          {customers.filter(c => !c.cpf).length} cliente(s) sem CPF — preencha para liberar novos agendamentos.
+        </div>
+      )}
+
       {/* Table or empty state */}
       {customers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -263,6 +315,9 @@ export function ClientesClient({ customers }: { customers: CustomerRow[] }) {
                   Telefone
                 </TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  CPF
+                </TableHead>
+                <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Última visita
                 </TableHead>
                 <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -286,6 +341,15 @@ export function ClientesClient({ customers }: { customers: CustomerRow[] }) {
                   <TableCell className="font-medium text-sm">{customer.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatPhone(customer.phone)}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {customer.cpf ? (
+                      <span className="text-muted-foreground">{formatCpf(customer.cpf)}</span>
+                    ) : (
+                      <Badge className="text-xs bg-[var(--status-pending)] text-[var(--status-pending-fg)]">
+                        CPF pendente
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {customer.lastVisit ? formatDate(customer.lastVisit) : '—'}

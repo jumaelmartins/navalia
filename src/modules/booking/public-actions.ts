@@ -175,7 +175,7 @@ export async function createPublicAppointment(args: {
   professionalId: string
   date: string
   startTime: string
-  customer: { name: string; phone: string; email?: string }
+  customer: { name: string; cpf: string; phone: string; email?: string }
   consent: boolean
 }): Promise<AppointmentResult> {
   try {

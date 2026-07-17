@@ -77,7 +77,7 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
     await prisma.barbershop.delete({ where: { id: barbershopId } })
   })
 
-  const customer = { name: 'João Silva', phone: '11987654321' }
+  const customer = { name: 'João Silva', cpf: '11144477735', phone: '11987654321' }
 
   const base = (startTime: string) => ({
     tenantId: barbershopId,
@@ -232,7 +232,7 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
         professionalId,
         date: todayInShop,
         startTime: pastSlot,
-        customer: { name: 'Past Test', phone: '11777777777' },
+        customer: { name: 'Past Test', cpf: '52998224725', phone: '11777777777' },
         source: 'ADMIN',
       })
       expect(result.ok).toBe(false)
@@ -274,7 +274,7 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
   it('(j) phone "123" → INVALID_PHONE', async () => {
     const result = await createAppointment({
       ...base('15:00'),
-      customer: { name: 'Bad Phone', phone: '123' },
+      customer: { name: 'Bad Phone', cpf: '52998224725', phone: '123' },
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe('INVALID_PHONE')
@@ -305,19 +305,18 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
 
   it('(m) PUBLIC_PAGE booking with consent sets privacyConsentAt; a repeat booking does not overwrite it', async () => {
     const uniquePhone = '11955550001'
-    // normalizePhone() prefixes 10/11-digit BR numbers with '55' before storing.
-    const normalizedPhone = '55' + uniquePhone
+    const consentCpf = '39053344705'
 
     const first = await createAppointment({
       ...base('16:00'),
       source: 'PUBLIC_PAGE',
       consent: true,
-      customer: { name: 'Consent Tester', phone: uniquePhone },
+      customer: { name: 'Consent Tester', cpf: consentCpf, phone: uniquePhone },
     })
     expect(first.ok).toBe(true)
 
     const afterFirst = await prisma.customer.findUnique({
-      where: { barbershopId_phone: { barbershopId, phone: normalizedPhone } },
+      where: { barbershopId_cpf: { barbershopId, cpf: consentCpf } },
     })
     expect(afterFirst?.privacyConsentAt).not.toBeNull()
     const consentAt = afterFirst!.privacyConsentAt!.getTime()
@@ -326,13 +325,61 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
       ...base('16:30'),
       source: 'PUBLIC_PAGE',
       consent: true,
-      customer: { name: 'Consent Tester', phone: uniquePhone },
+      customer: { name: 'Consent Tester', cpf: consentCpf, phone: uniquePhone },
     })
     expect(second.ok).toBe(true)
 
     const afterSecond = await prisma.customer.findUnique({
-      where: { barbershopId_phone: { barbershopId, phone: normalizedPhone } },
+      where: { barbershopId_cpf: { barbershopId, cpf: consentCpf } },
     })
     expect(afterSecond?.privacyConsentAt?.getTime()).toBe(consentAt)
+  })
+
+  it('(n) invalid CPF checksum → INVALID_CPF', async () => {
+    const result = await createAppointment({
+      ...base('17:00'),
+      customer: { name: 'Bad CPF', cpf: '11111111111', phone: '11966660001' },
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('INVALID_CPF')
+  })
+
+  it('(o) two different customers sharing one phone get separate records by CPF', async () => {
+    // 09:00/09:30 (not 17:15/17:45): the Monday availability rule from beforeAll
+    // is 09:00-17:00, so the last valid 30-min start is 16:30 — 09:00/09:30 are
+    // free slots inside the window (09:00 was only *attempted* by test (e), which
+    // failed at INVALID_SERVICE before booking anything).
+    const sharedPhone = '11955559999'
+    const first = await createAppointment({
+      ...base('09:00'),
+      customer: { name: 'Irmao Um', cpf: '11144477735', phone: sharedPhone },
+    })
+    const second = await createAppointment({
+      ...base('09:30'),
+      customer: { name: 'Irmao Dois', cpf: '52998224725', phone: sharedPhone },
+    })
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(true)
+    if (!first.ok || !second.ok) return
+
+    const firstAppt = await prisma.appointment.findUnique({ where: { id: first.data.appointmentId } })
+    const secondAppt = await prisma.appointment.findUnique({ where: { id: second.data.appointmentId } })
+    expect(firstAppt?.customerId).not.toBe(secondAppt?.customerId)
+  })
+
+  it('(p) migration gate: any customer missing CPF blocks all new bookings for the tenant', async () => {
+    const legacy = await prisma.customer.create({
+      data: { barbershopId, name: 'Legacy No CPF', phone: '11900000000', cpf: null },
+    })
+    try {
+      const result = await createAppointment({
+        ...base('18:15'),
+        customer: { name: 'Anyone', cpf: '39053344705', phone: '11955550002' },
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toBe('CPF_MIGRATION_REQUIRED')
+    } finally {
+      await prisma.customer.delete({ where: { id: legacy.id } })
+    }
   })
 })

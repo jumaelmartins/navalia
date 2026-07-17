@@ -22,7 +22,7 @@ describe.skipIf(!process.env.DATABASE_URL)('createAppointment → Notification',
       professionalId: pro.id,
       date,
       startTime: '10:00',
-      customer: { name: 'Teste Notif', phone: '5511999990001' },
+      customer: { name: 'Teste Notif', cpf: '20000000027', phone: '5511999990001' },
       source: 'ADMIN',
     })
     expect(res.ok).toBe(true)

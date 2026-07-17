@@ -63,6 +63,7 @@ export default async function ClientesPage() {
       id: c.id,
       name: c.name,
       phone: c.phone,
+      cpf: c.cpf,
       notes: c.notes,
       lastVisit,
       totalSpentCents,

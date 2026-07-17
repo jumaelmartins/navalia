@@ -74,6 +74,8 @@ export type DashboardKpis = {
   weekCount: number
   todayRevenueCents: number
   weekRevenueCents: number
+  todayRevenueRealizedCents: number
+  weekRevenueRealizedCents: number
   occupancyPct: number
   noShowRate: number
   topServices: { name: string; count: number }[]
@@ -134,8 +136,12 @@ export async function getDashboardKpis(tenantId: string): Promise<DashboardKpis>
 
   // ── Today KPIs ──
   const todayCount = todayAppts.length
-  const todayRevenueCents = todayAppts
-    .filter(a => a.status === 'CONFIRMED' || a.status === 'COMPLETED')
+  const todayRevAppts = todayAppts.filter(
+    a => a.status === 'CONFIRMED' || a.status === 'COMPLETED',
+  )
+  const todayRevenueCents = todayRevAppts.reduce((s, a) => s + a.service.priceCents, 0)
+  const todayRevenueRealizedCents = todayAppts
+    .filter(a => a.status === 'COMPLETED')
     .reduce((s, a) => s + a.service.priceCents, 0)
 
   // ── Week KPIs (CONFIRMED+COMPLETED for revenue, all non-cancelled for count) ──
@@ -145,6 +151,9 @@ export async function getDashboardKpis(tenantId: string): Promise<DashboardKpis>
   )
   const weekCount = weekAppts.length
   const weekRevenueCents = weekRevAppts.reduce((s, a) => s + a.service.priceCents, 0)
+  const weekRevenueRealizedCents = weekAppts
+    .filter(a => a.status === 'COMPLETED')
+    .reduce((s, a) => s + a.service.priceCents, 0)
 
   // ── Occupancy ──
   let availableMin = 0
@@ -196,6 +205,8 @@ export async function getDashboardKpis(tenantId: string): Promise<DashboardKpis>
     weekCount,
     todayRevenueCents,
     weekRevenueCents,
+    todayRevenueRealizedCents,
+    weekRevenueRealizedCents,
     occupancyPct,
     noShowRate,
     topServices,

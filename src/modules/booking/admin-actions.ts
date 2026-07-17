@@ -448,7 +448,7 @@ export async function createAppointmentAdmin(args: {
   professionalId: string
   date: string
   startTime: string
-  customer: { name: string; phone: string; email?: string }
+  customer: { name: string; cpf: string; phone: string; email?: string }
 }): Promise<ActionResult<{ appointmentId: string }>> {
   const { barbershop } = await requireOnboarded()
 
@@ -464,6 +464,12 @@ export async function createAppointmentAdmin(args: {
     })
 
     if (!result.ok) {
+      if (result.error === 'CPF_MIGRATION_REQUIRED') {
+        return {
+          ok: false,
+          error: 'Existem clientes sem CPF cadastrado. Preencha o CPF de todos os clientes em /dashboard/clientes antes de criar novos agendamentos.',
+        }
+      }
       return { ok: false, error: BOOKING_ERROR_PT_BR[result.error] ?? result.error }
     }
 
