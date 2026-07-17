@@ -229,4 +229,23 @@ describe.skipIf(!process.env.DATABASE_URL)('verification (integration)', () => {
     expect(sendWhatsApp).not.toHaveBeenCalled()
     expect(sendEmail).not.toHaveBeenCalled()
   })
+
+  it('(n) two concurrent requestVerificationCode calls for the same new phone only send once', async () => {
+    const sendEmail = vi.fn().mockResolvedValue({ ok: true })
+    const uniqueCpf = 'concurrent-test-cpf'
+    const uniquePhone = '5571999990199'
+
+    const [a, b] = await Promise.all([
+      requestVerificationCode({ barbershopId, cpf: uniqueCpf, phone: uniquePhone, email: 'cliente@example.com' }, { sendEmail }),
+      requestVerificationCode({ barbershopId, cpf: uniqueCpf, phone: uniquePhone, email: 'cliente@example.com' }, { sendEmail }),
+    ])
+
+    const results = [a, b]
+    const succeeded = results.filter(r => r.ok)
+    const failed = results.filter(r => !r.ok)
+    expect(succeeded).toHaveLength(1)
+    expect(failed).toHaveLength(1)
+    if (!failed[0].ok) expect(failed[0].error).toBe('RESEND_TOO_SOON')
+    expect(sendEmail).toHaveBeenCalledTimes(1)
+  })
 })

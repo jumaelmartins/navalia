@@ -74,32 +74,23 @@ export async function hasRecentVerification(
  * Sends a 6-digit code via WhatsApp (if the shop's Evolution instance is
  * connected) or email (fallback — requires `args.email`).
  *
- * The cooldown-check-then-create sequence is wrapped in a Serializable
- * transaction so two concurrent calls for the same (barbershopId, cpf,
- * phone) can't both pass the cooldown check before either row exists
- * (which would send two codes and create two rows). On a serialization /
- * unique-constraint race (P2034 / P2002 — see isRetryableError), the whole
- * function body is retried once, mirroring createAppointment's single-retry
- * pattern: the loser sees the winner's freshly-created row on retry and
- * correctly returns RESEND_TOO_SOON.
+ * The DB, not the network call, is the sole arbiter of "who gets to send":
+ * phase 1 (`reserveVerificationSlot`) commits a Serializable transaction that
+ * contains ONLY database operations — it re-checks the cooldown and, if the
+ * slot is free, inserts the PhoneVerification row for this attempt's code
+ * hash. Two truly concurrent callers for the same (barbershopId, cpf, phone)
+ * can't both commit an insert inside the cooldown window: Postgres aborts
+ * one of them with a serialization failure (P2034), which is retried once
+ * (mirroring createAppointment's single-retry pattern) — on retry it sees
+ * the winner's row and returns RESEND_TOO_SOON. Only after that reservation
+ * has actually committed does phase 2 perform the real side effect
+ * (`sendWhatsApp`/`sendEmail`) — so at most one caller ever sends a message.
+ * If the send then fails, the reserved row is best-effort deleted so the
+ * customer isn't stuck behind a cooldown for a code that never arrived.
  */
 export async function requestVerificationCode(
   args: { barbershopId: string; cpf: string; phone: string; email?: string },
   deps: Deps = {},
-): Promise<Result<{ channel: 'WHATSAPP' | 'EMAIL' }>> {
-  try {
-    return await requestVerificationCodeAttempt(args, deps)
-  } catch (err) {
-    if (isRetryableError(err)) {
-      return await requestVerificationCodeAttempt(args, deps)
-    }
-    throw err
-  }
-}
-
-async function requestVerificationCodeAttempt(
-  args: { barbershopId: string; cpf: string; phone: string; email?: string },
-  deps: Deps,
 ): Promise<Result<{ channel: 'WHATSAPP' | 'EMAIL' }>> {
   const db = deps.prisma ?? realPrisma
   const sendWhatsApp =
@@ -122,6 +113,49 @@ async function requestVerificationCodeAttempt(
     return { ok: false, error: 'EMAIL_REQUIRED' }
   }
 
+  const channel: 'WHATSAPP' | 'EMAIL' = useWhatsApp ? 'WHATSAPP' : 'EMAIL'
+  const code = generateCode()
+  const codeHash = hashCode(code)
+
+  // --- Phase 1: reserve the slot in the DB. No network calls in here. ---
+  let reservation: Result<{ id: string }>
+  try {
+    reservation = await reserveVerificationSlot(db, args, channel, codeHash)
+  } catch (err) {
+    if (isRetryableError(err)) {
+      reservation = await reserveVerificationSlot(db, args, channel, codeHash)
+    } else {
+      throw err
+    }
+  }
+
+  if (!reservation.ok) return reservation
+
+  // --- Phase 2: send, only now that the reservation has committed. ---
+  const text = `Seu código de verificação para ${shop.name}: ${code}\nVálido por 10 minutos.`
+  const sendResult = useWhatsApp
+    ? await sendWhatsApp(shop.evolutionInstanceId!, args.phone, text)
+    : await sendEmail(args.email!, `Código de verificação — ${shop.name}`, text)
+
+  if (!sendResult.ok) {
+    await db.phoneVerification.delete({ where: { id: reservation.data.id } }).catch(() => {})
+    return { ok: false, error: 'SEND_FAILED' }
+  }
+
+  return { ok: true, data: { channel } }
+}
+
+/**
+ * Phase 1 only: DB-only reservation of a verification slot, run inside a
+ * Serializable transaction. Contains no `sendWhatsApp`/`sendEmail` calls —
+ * see the docstring on `requestVerificationCode` for why that matters.
+ */
+async function reserveVerificationSlot(
+  db: typeof realPrisma,
+  args: { barbershopId: string; cpf: string; phone: string },
+  channel: 'WHATSAPP' | 'EMAIL',
+  codeHash: string,
+): Promise<Result<{ id: string }>> {
   return db.$transaction(
     async tx => {
       const recent = await tx.phoneVerification.findFirst({
@@ -133,29 +167,21 @@ async function requestVerificationCodeAttempt(
         return { ok: false as const, error: 'RESEND_TOO_SOON' as const }
       }
 
-      const code = generateCode()
-      const text = `Seu código de verificação para ${shop.name}: ${code}\nVálido por 10 minutos.`
-
-      const sendResult = useWhatsApp
-        ? await sendWhatsApp(shop.evolutionInstanceId!, args.phone, text)
-        : await sendEmail(args.email!, `Código de verificação — ${shop.name}`, text)
-
-      if (!sendResult.ok) return { ok: false as const, error: 'SEND_FAILED' as const }
-
-      await tx.phoneVerification.create({
+      const created = await tx.phoneVerification.create({
         data: {
           barbershopId: args.barbershopId,
           cpf: args.cpf,
           phone: args.phone,
-          codeHash: hashCode(code),
-          channel: useWhatsApp ? 'WHATSAPP' : 'EMAIL',
+          codeHash,
+          channel,
           expiresAt: new Date(Date.now() + CODE_TTL_MS),
         },
+        select: { id: true },
       })
 
-      return { ok: true as const, data: { channel: useWhatsApp ? ('WHATSAPP' as const) : ('EMAIL' as const) } }
+      return { ok: true as const, data: { id: created.id } }
     },
-    { isolationLevel: 'Serializable' },
+    { isolationLevel: 'Serializable', timeout: 15000 },
   )
 }
 
