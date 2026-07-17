@@ -155,4 +155,78 @@ describe.skipIf(!process.env.DATABASE_URL)('verification (integration)', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe('NOT_FOUND')
   })
+
+  it('(k) 5 wrong attempts exhaust the cap; a 6th call (even with the correct code) is TOO_MANY_ATTEMPTS', async () => {
+    const sendWhatsApp = vi.fn()
+    let sentCode = ''
+    sendWhatsApp.mockImplementation(async (_instance: string, _to: string, text: string) => {
+      sentCode = text.match(/\d{6}/)?.[0] ?? ''
+      return { ok: true }
+    })
+
+    const cpf = 'attempt-cap-cpf'
+    const phone = '5571999990111'
+    const requested = await requestVerificationCode({ barbershopId: connectedShopId, cpf, phone }, { sendWhatsApp })
+    expect(requested.ok).toBe(true)
+    expect(sentCode).toMatch(/^\d{6}$/)
+
+    const wrongCode = sentCode === '000000' ? '111111' : '000000'
+
+    for (let i = 0; i < 5; i++) {
+      const result = await verifyCode({ barbershopId: connectedShopId, cpf, phone, code: wrongCode })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toBe('CODE_INVALID')
+    }
+
+    // 6th call, even with the originally-correct code, proves attempts are
+    // exhausted regardless of correctness (the cap check happens before the
+    // hash comparison).
+    const finalResult = await verifyCode({ barbershopId: connectedShopId, cpf, phone, code: sentCode })
+    expect(finalResult.ok).toBe(false)
+    if (!finalResult.ok) expect(finalResult.error).toBe('TOO_MANY_ATTEMPTS')
+  })
+
+  it('(l) an expired code returns CODE_EXPIRED', async () => {
+    const cpf = 'expire-test-cpf'
+    const phone = '5571999990112'
+    await prisma.phoneVerification.create({
+      data: {
+        barbershopId: connectedShopId,
+        cpf,
+        phone,
+        codeHash: 'irrelevant-hash-never-matched',
+        channel: 'WHATSAPP',
+        expiresAt: new Date(Date.now() - 1000),
+      },
+    })
+
+    const result = await verifyCode({ barbershopId: connectedShopId, cpf, phone, code: '123456' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('CODE_EXPIRED')
+  })
+
+  it('(m) requestVerificationCode short-circuits to ALREADY_VERIFIED before attempting any send', async () => {
+    const cpf = 'already-verified-cpf'
+    const phone = '5571999990113'
+    await prisma.customer.create({
+      data: {
+        barbershopId: connectedShopId,
+        name: 'Already Verified Customer',
+        cpf,
+        phone,
+        phoneVerifiedAt: new Date(),
+      },
+    })
+
+    const sendWhatsApp = vi.fn().mockResolvedValue({ ok: true })
+    const sendEmail = vi.fn().mockResolvedValue({ ok: true })
+    const result = await requestVerificationCode(
+      { barbershopId: connectedShopId, cpf, phone },
+      { sendWhatsApp, sendEmail },
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('ALREADY_VERIFIED')
+    expect(sendWhatsApp).not.toHaveBeenCalled()
+    expect(sendEmail).not.toHaveBeenCalled()
+  })
 })

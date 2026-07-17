@@ -3,6 +3,7 @@ import { createHash, randomInt } from 'crypto'
 import { prisma as realPrisma } from '@/lib/prisma'
 import { evolution } from '@/modules/whatsapp/evolution-client'
 import { sendEmail as realSendEmail } from '@/modules/notifications/email'
+import { isRetryableError } from './booking-shared'
 
 const CODE_TTL_MS = 10 * 60 * 1000
 const RESEND_COOLDOWN_MS = 60 * 1000
@@ -72,10 +73,33 @@ export async function hasRecentVerification(
 /**
  * Sends a 6-digit code via WhatsApp (if the shop's Evolution instance is
  * connected) or email (fallback — requires `args.email`).
+ *
+ * The cooldown-check-then-create sequence is wrapped in a Serializable
+ * transaction so two concurrent calls for the same (barbershopId, cpf,
+ * phone) can't both pass the cooldown check before either row exists
+ * (which would send two codes and create two rows). On a serialization /
+ * unique-constraint race (P2034 / P2002 — see isRetryableError), the whole
+ * function body is retried once, mirroring createAppointment's single-retry
+ * pattern: the loser sees the winner's freshly-created row on retry and
+ * correctly returns RESEND_TOO_SOON.
  */
 export async function requestVerificationCode(
   args: { barbershopId: string; cpf: string; phone: string; email?: string },
   deps: Deps = {},
+): Promise<Result<{ channel: 'WHATSAPP' | 'EMAIL' }>> {
+  try {
+    return await requestVerificationCodeAttempt(args, deps)
+  } catch (err) {
+    if (isRetryableError(err)) {
+      return await requestVerificationCodeAttempt(args, deps)
+    }
+    throw err
+  }
+}
+
+async function requestVerificationCodeAttempt(
+  args: { barbershopId: string; cpf: string; phone: string; email?: string },
+  deps: Deps,
 ): Promise<Result<{ channel: 'WHATSAPP' | 'EMAIL' }>> {
   const db = deps.prisma ?? realPrisma
   const sendWhatsApp =
@@ -85,15 +109,6 @@ export async function requestVerificationCode(
 
   if (await isPhoneVerified(args.barbershopId, args.cpf, args.phone, { prisma: db })) {
     return { ok: false, error: 'ALREADY_VERIFIED' }
-  }
-
-  const recent = await db.phoneVerification.findFirst({
-    where: { barbershopId: args.barbershopId, cpf: args.cpf, phone: args.phone },
-    orderBy: { createdAt: 'desc' },
-    select: { createdAt: true },
-  })
-  if (recent && Date.now() - recent.createdAt.getTime() < RESEND_COOLDOWN_MS) {
-    return { ok: false, error: 'RESEND_TOO_SOON' }
   }
 
   const shop = await db.barbershop.findUnique({
@@ -107,27 +122,41 @@ export async function requestVerificationCode(
     return { ok: false, error: 'EMAIL_REQUIRED' }
   }
 
-  const code = generateCode()
-  const text = `Seu código de verificação para ${shop.name}: ${code}\nVálido por 10 minutos.`
+  return db.$transaction(
+    async tx => {
+      const recent = await tx.phoneVerification.findFirst({
+        where: { barbershopId: args.barbershopId, cpf: args.cpf, phone: args.phone },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      })
+      if (recent && Date.now() - recent.createdAt.getTime() < RESEND_COOLDOWN_MS) {
+        return { ok: false as const, error: 'RESEND_TOO_SOON' as const }
+      }
 
-  const sendResult = useWhatsApp
-    ? await sendWhatsApp(shop.evolutionInstanceId!, args.phone, text)
-    : await sendEmail(args.email!, `Código de verificação — ${shop.name}`, text)
+      const code = generateCode()
+      const text = `Seu código de verificação para ${shop.name}: ${code}\nVálido por 10 minutos.`
 
-  if (!sendResult.ok) return { ok: false, error: 'SEND_FAILED' }
+      const sendResult = useWhatsApp
+        ? await sendWhatsApp(shop.evolutionInstanceId!, args.phone, text)
+        : await sendEmail(args.email!, `Código de verificação — ${shop.name}`, text)
 
-  await db.phoneVerification.create({
-    data: {
-      barbershopId: args.barbershopId,
-      cpf: args.cpf,
-      phone: args.phone,
-      codeHash: hashCode(code),
-      channel: useWhatsApp ? 'WHATSAPP' : 'EMAIL',
-      expiresAt: new Date(Date.now() + CODE_TTL_MS),
+      if (!sendResult.ok) return { ok: false as const, error: 'SEND_FAILED' as const }
+
+      await tx.phoneVerification.create({
+        data: {
+          barbershopId: args.barbershopId,
+          cpf: args.cpf,
+          phone: args.phone,
+          codeHash: hashCode(code),
+          channel: useWhatsApp ? 'WHATSAPP' : 'EMAIL',
+          expiresAt: new Date(Date.now() + CODE_TTL_MS),
+        },
+      })
+
+      return { ok: true as const, data: { channel: useWhatsApp ? ('WHATSAPP' as const) : ('EMAIL' as const) } }
     },
-  })
-
-  return { ok: true, data: { channel: useWhatsApp ? 'WHATSAPP' : 'EMAIL' } }
+    { isolationLevel: 'Serializable' },
+  )
 }
 
 /** Verifies the most recent pending code for this (barbershopId, cpf, phone). */
@@ -147,14 +176,14 @@ export async function verifyCode(
 
   if (hashCode(args.code) !== verification.codeHash) {
     await db.phoneVerification.update({
-      where: { id: verification.id },
+      where: { id: verification.id, barbershopId: args.barbershopId },
       data: { attempts: { increment: 1 } },
     })
     return { ok: false, error: 'CODE_INVALID' }
   }
 
   await db.phoneVerification.update({
-    where: { id: verification.id },
+    where: { id: verification.id, barbershopId: args.barbershopId },
     data: { verifiedAt: new Date() },
   })
   return { ok: true, data: { verified: true } }
