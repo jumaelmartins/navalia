@@ -34,6 +34,7 @@ import {
   getAdminSlots,
 } from '@/modules/booking/admin-actions'
 import { createScheduleBlock, deleteScheduleBlock } from '@/modules/catalog/availability-actions'
+import { normalizeCpf, isValidCpf } from '@/modules/tenancy/cpf'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -447,6 +448,7 @@ function NewAppointmentDialog({
   const [startTime, setStartTime] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [customerCpf, setCustomerCpf] = useState('')
   const [slots, setSlots] = useState<string[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
 
@@ -461,13 +463,18 @@ function NewAppointmentDialog({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    const normalizedCpf = normalizeCpf(customerCpf)
+    if (!normalizedCpf || !isValidCpf(normalizedCpf)) {
+      toast.error('CPF inválido. Verifique os números digitados.')
+      return
+    }
     startTransition(async () => {
       const res = await createAppointmentAdmin({
         serviceId,
         professionalId,
         date,
         startTime,
-        customer: { name: customerName.trim(), phone: customerPhone.trim() },
+        customer: { name: customerName.trim(), cpf: normalizedCpf, phone: customerPhone.trim() },
       })
       if (!res.ok) toast.error(res.error)
       else { toast.success('Agendamento criado.'); onClose(); onRefresh() }
@@ -547,6 +554,10 @@ function NewAppointmentDialog({
           <div className="space-y-1.5">
             <Label htmlFor="na-name">Nome do cliente *</Label>
             <Input id="na-name" required value={customerName} onChange={e => setCustomerName(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="na-cpf">CPF *</Label>
+            <Input id="na-cpf" required value={customerCpf} onChange={e => setCustomerCpf(e.target.value)} placeholder="000.000.000-00" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="na-phone">Telefone *</Label>
