@@ -214,7 +214,7 @@ describe.skipIf(!process.env.DATABASE_URL)('getDashboardKpis revenue split', () 
       professionalId,
       date: today,
       startTime: firstSlot,
-      customer: { name: 'Cliente Confirmado', phone: '11987654321' },
+      customer: { name: 'Cliente Confirmado', cpf: '11144477735', phone: '11987654321' },
       source: 'ADMIN',
     })
     if (!first.ok) throw new Error(`setup failed: ${first.error}`)
@@ -225,7 +225,7 @@ describe.skipIf(!process.env.DATABASE_URL)('getDashboardKpis revenue split', () 
       professionalId,
       date: today,
       startTime: secondSlot,
-      customer: { name: 'Cliente Concluido', phone: '11987654322' },
+      customer: { name: 'Cliente Concluido', cpf: '52998224725', phone: '11987654322' },
       source: 'ADMIN',
     })
     if (!second.ok) throw new Error(`setup failed: ${second.error}`)

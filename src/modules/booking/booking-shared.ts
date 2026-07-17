@@ -20,6 +20,7 @@ export function isRetryableError(err: unknown): boolean {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     // P2034: serialization / snapshot-isolation failure
     // P2002: unique constraint race — two concurrent new-customer upserts
+    //        racing on the same (barbershopId, cpf) key
     return err.code === 'P2034' || err.code === 'P2002'
   }
   // DriverAdapterError: TransactionWriteConflict — serialization failure surfaced

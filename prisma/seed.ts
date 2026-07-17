@@ -54,21 +54,21 @@ const PROFESSIONALS_DATA = [
 ]
 
 const CUSTOMERS_DATA = [
-  { name: 'André Luiz Santos', phone: '5571991110001' },
-  { name: 'Bruno Costa', phone: '5571991110002' },
-  { name: 'Carlos Eduardo Lima', phone: '5571991110003' },
-  { name: 'Diego Ferreira', phone: '5571991110004' },
-  { name: 'Eliton Souza', phone: '5571991110005' },
-  { name: 'Fábio Rodrigues', phone: '5571991110006' },
-  { name: 'Gabriel Oliveira', phone: '5571991110007' },
-  { name: 'Hélio Nascimento', phone: '5571991110008' },
-  { name: 'Igor Araújo', phone: '5571991110009' },
-  { name: 'Jonas Ribeiro', phone: '5571991110010' },
-  { name: 'Lucas Barbosa', phone: '5571991110011' },
-  { name: 'Marcos Pereira', phone: '5571991110012' },
-  { name: 'Nathan Alves', phone: '5571991110013' },
-  { name: 'Otávio Gomes', phone: '5571991110014' },
-  { name: 'Paulo Henrique Melo', phone: '5571991110015' },
+  { name: 'André Luiz Santos', cpf: '20000000027', phone: '5571991110001' },
+  { name: 'Bruno Costa', cpf: '20000791997', phone: '5571991110002' },
+  { name: 'Carlos Eduardo Lima', cpf: '20001583824', phone: '5571991110003' },
+  { name: 'Diego Ferreira', cpf: '20002375761', phone: '5571991110004' },
+  { name: 'Eliton Souza', cpf: '20003167607', phone: '5571991110005' },
+  { name: 'Fábio Rodrigues', cpf: '20003959538', phone: '5571991110006' },
+  { name: 'Gabriel Oliveira', cpf: '20004751400', phone: '5571991110007' },
+  { name: 'Hélio Nascimento', cpf: '20005543347', phone: '5571991110008' },
+  { name: 'Igor Araújo', cpf: '20006335284', phone: '5571991110009' },
+  { name: 'Jonas Ribeiro', cpf: '20007127111', phone: '5571991110010' },
+  { name: 'Lucas Barbosa', cpf: '20007919050', phone: '5571991110011' },
+  { name: 'Marcos Pereira', cpf: '20008710970', phone: '5571991110012' },
+  { name: 'Nathan Alves', cpf: '20009502807', phone: '5571991110013' },
+  { name: 'Otávio Gomes', cpf: '20010294708', phone: '5571991110014' },
+  { name: 'Paulo Henrique Melo', cpf: '20011086645', phone: '5571991110015' },
 ]
 
 // Mon-Sat 09:00-19:00 weekly availability
@@ -251,7 +251,7 @@ async function main() {
   const customerIds: string[] = []
   for (const c of CUSTOMERS_DATA) {
     const customer = await prisma.customer.upsert({
-      where: { barbershopId_phone: { barbershopId: barbershop.id, phone: c.phone } },
+      where: { barbershopId_cpf: { barbershopId: barbershop.id, cpf: c.cpf } },
       create: { barbershopId: barbershop.id, ...c },
       update: {},
     })
