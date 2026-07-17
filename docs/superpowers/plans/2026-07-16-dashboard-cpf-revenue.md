@@ -571,6 +571,7 @@ git commit -m "feat(db): add nullable Customer.cpf, make it the unique tenant id
 - Modify: `src/modules/booking/booking-shared.ts:18-33` (comment only)
 - Modify: `src/modules/booking/conflict.test.ts` (fixtures + new tests)
 - Modify: `src/modules/insights/queries.test.ts` (fixture — see Step 7 below)
+- Modify: `prisma/seed.ts` (fixture + upsert key — see Step 9 below)
 
 **Interfaces:**
 - Consumes: `normalizeCpf`, `isValidCpf` from `@/modules/tenancy/cpf` (Task 3).
@@ -828,10 +829,64 @@ Run: `npm test -- queries.test.ts`
 Expected: PASS (the `getDashboardKpis revenue split` test from Task 2 still passes —
 CPF has no bearing on revenue totals, this is purely a type-completeness fix).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Fix `prisma/seed.ts` (still upserts by phone, seeds customers with no CPF)**
+
+`prisma/seed.ts` upserts its 15 demo customers by `barbershopId_phone`, a compound key
+that no longer exists on `Customer` after Task 4's migration — this fails to typecheck.
+Worse, if left as-is even after switching the key, the seeded customers would have
+`cpf = null` forever, which would permanently trip the migration gate (Step 1's
+`CPF_MIGRATION_REQUIRED` check) for the seeded demo barbershop — `npm run seed` is the
+project's documented quick-start step (see `CLAUDE.md`), so every fresh dev setup would
+start gated.
+
+In `prisma/seed.ts`, replace the `CUSTOMERS_DATA` array (around line 56-71) — add a
+`cpf` to each entry using these 15 pre-validated, distinct CPFs:
+
+```ts
+const CUSTOMERS_DATA = [
+  { name: 'André Luiz Santos', cpf: '20000000027', phone: '5571991110001' },
+  { name: 'Bruno Costa', cpf: '20000791997', phone: '5571991110002' },
+  { name: 'Carlos Eduardo Lima', cpf: '20001583824', phone: '5571991110003' },
+  { name: 'Diego Ferreira', cpf: '20002375761', phone: '5571991110004' },
+  { name: 'Eliton Souza', cpf: '20003167607', phone: '5571991110005' },
+  { name: 'Fábio Rodrigues', cpf: '20003959538', phone: '5571991110006' },
+  { name: 'Gabriel Oliveira', cpf: '20004751400', phone: '5571991110007' },
+  { name: 'Hélio Nascimento', cpf: '20005543347', phone: '5571991110008' },
+  { name: 'Igor Araújo', cpf: '20006335284', phone: '5571991110009' },
+  { name: 'Jonas Ribeiro', cpf: '20007127111', phone: '5571991110010' },
+  { name: 'Lucas Barbosa', cpf: '20007919050', phone: '5571991110011' },
+  { name: 'Marcos Pereira', cpf: '20008710970', phone: '5571991110012' },
+  { name: 'Nathan Alves', cpf: '20009502807', phone: '5571991110013' },
+  { name: 'Otávio Gomes', cpf: '20010294708', phone: '5571991110014' },
+  { name: 'Paulo Henrique Melo', cpf: '20011086645', phone: '5571991110015' },
+]
+```
+
+(These pass `isValidCpf` from Task 3 — each is a real checksum-valid CPF, verified by
+computing the standard weighted-sum check digits; none is a repeated-digit sequence.)
+
+Then update the upsert around line 253-257 to key on `cpf` instead of `phone`:
+
+```ts
+  const customerIds: string[] = []
+  for (const c of CUSTOMERS_DATA) {
+    const customer = await prisma.customer.upsert({
+      where: { barbershopId_cpf: { barbershopId: barbershop.id, cpf: c.cpf } },
+      create: { barbershopId: barbershop.id, ...c },
+      update: {},
+    })
+    customerIds.push(customer.id)
+  }
+```
+
+Run: `npm run seed` against the dev database and confirm it completes without error,
+then spot-check: `npx prisma studio` (or a quick query) shows all 15 seeded customers
+with a non-null `cpf`.
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/modules/booking/types.ts src/modules/booking/create-appointment.ts src/modules/booking/booking-shared.ts src/modules/booking/conflict.test.ts src/modules/insights/queries.test.ts
+git add src/modules/booking/types.ts src/modules/booking/create-appointment.ts src/modules/booking/booking-shared.ts src/modules/booking/conflict.test.ts src/modules/insights/queries.test.ts prisma/seed.ts
 git commit -m "feat(booking): require CPF, identify customers by CPF, gate bookings until legacy customers are migrated"
 ```
 
