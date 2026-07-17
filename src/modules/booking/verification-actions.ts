@@ -26,7 +26,7 @@ async function resolveAccessibleShopId(slug: string): Promise<string | null> {
     where: { slug },
     select: { id: true, onboardingCompleted: true, subscriptionStatus: true, trialEndsAt: true },
   })
-  if (!shop || !isShopAccessible(shop)) return null
+  if (!shop || !(await isShopAccessible(shop))) return null
   return shop.id
 }
 
