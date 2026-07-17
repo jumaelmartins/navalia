@@ -4,6 +4,7 @@ import { addMinutes, computeSlots, isCanonicalDate } from './slots'
 import { dateToWeekday, isRetryableError, type BizHoursMap } from './booking-shared'
 import { pushNewAppointmentToOwner } from '@/modules/notifications/push'
 import { normalizeCpf, isValidCpf } from '@/modules/tenancy/cpf'
+import { isPhoneVerified, hasRecentVerification } from './verification'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -201,6 +202,16 @@ export async function createAppointment(args: {
   const cpf = normalizeCpf(args.customer.cpf)
   if (cpf === null || !isValidCpf(cpf)) return { ok: false, error: 'INVALID_CPF' }
 
+  let verifiedPhoneTimestamp: Date | undefined
+  if (args.source === 'PUBLIC_PAGE') {
+    const trusted = await isPhoneVerified(args.tenantId, cpf, phone)
+    if (!trusted) {
+      const recentlyVerified = await hasRecentVerification(args.tenantId, cpf, phone)
+      if (!recentlyVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' }
+      verifiedPhoneTimestamp = new Date()
+    }
+  }
+
   const runTx = async () =>
     prisma.$transaction(
       async tx => {
@@ -303,8 +314,13 @@ export async function createAppointment(args: {
             phone,
             email: args.customer.email,
             privacyConsentAt: args.consent ? new Date() : undefined,
+            phoneVerifiedAt: args.source === 'PUBLIC_PAGE' ? (verifiedPhoneTimestamp ?? new Date()) : undefined,
           },
-          update: { name: args.customer.name, phone },
+          update: {
+            name: args.customer.name,
+            phone,
+            ...(verifiedPhoneTimestamp ? { phoneVerifiedAt: verifiedPhoneTimestamp } : {}),
+          },
         })
 
         // --- 6. Create appointment (always CONFIRMED) ---
