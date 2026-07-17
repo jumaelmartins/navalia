@@ -118,7 +118,7 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <Card className="shadow-sm">
+    <Card className="min-w-0 shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardDescription className="text-xs font-medium uppercase tracking-wider">
@@ -128,7 +128,12 @@ function KpiCard({
         </div>
       </CardHeader>
       <CardContent>
-        <span className="font-display text-4xl font-semibold text-primary">{value}</span>
+        <span
+          className="block truncate font-display text-2xl font-semibold text-primary sm:text-3xl"
+          title={value}
+        >
+          {value}
+        </span>
         {subtitle && (
           <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         )}
