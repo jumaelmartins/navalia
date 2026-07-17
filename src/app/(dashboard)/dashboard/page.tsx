@@ -305,7 +305,7 @@ export default async function DashboardPage() {
       {/* KPI cards */}
       <section>
         <h2 className="mb-4 text-base font-semibold text-foreground">Visão geral</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <KpiCard
             title="Hoje"
             value={String(kpis.todayCount)}
@@ -319,18 +319,6 @@ export default async function DashboardPage() {
             icon={TrendingUpIcon}
           />
           <KpiCard
-            title="Receita hoje"
-            value={formatCentsToBRL(kpis.todayRevenueCents)}
-            subtitle="confirmados + concluídos"
-            icon={TrendingUpIcon}
-          />
-          <KpiCard
-            title="Receita semana"
-            value={formatCentsToBRL(kpis.weekRevenueCents)}
-            subtitle="confirmados + concluídos"
-            icon={TrendingUpIcon}
-          />
-          <KpiCard
             title="Ocupação"
             value={`${kpis.occupancyPct}%`}
             subtitle="da semana atual"
@@ -341,6 +329,30 @@ export default async function DashboardPage() {
             value={`${kpis.noShowRate}%`}
             subtitle="últimos 30 dias"
             icon={AlertTriangleIcon}
+          />
+          <KpiCard
+            title="Receita prevista hoje"
+            value={formatCentsToBRL(kpis.todayRevenueCents)}
+            subtitle="confirmados + concluídos"
+            icon={TrendingUpIcon}
+          />
+          <KpiCard
+            title="Receita prevista semana"
+            value={formatCentsToBRL(kpis.weekRevenueCents)}
+            subtitle="confirmados + concluídos"
+            icon={TrendingUpIcon}
+          />
+          <KpiCard
+            title="Receita realizada hoje"
+            value={formatCentsToBRL(kpis.todayRevenueRealizedCents)}
+            subtitle="somente concluídos"
+            icon={TrendingUpIcon}
+          />
+          <KpiCard
+            title="Receita realizada semana"
+            value={formatCentsToBRL(kpis.weekRevenueRealizedCents)}
+            subtitle="somente concluídos"
+            icon={TrendingUpIcon}
           />
         </div>
       </section>
