@@ -77,6 +77,7 @@ model Barbershop {
   professionals Professional[]
   services      Service[]
   customers     Customer[]
+  phoneVerifications PhoneVerification[]
   appointments  Appointment[]
   notifications Notification[]
 }
@@ -225,11 +226,27 @@ model Customer {
   email            String?
   notes            String?
   privacyConsentAt DateTime?
+  phoneVerifiedAt  DateTime?
   appointments     Appointment[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   @@unique([barbershopId, cpf])
   @@index([barbershopId, phone])
+}
+
+model PhoneVerification {
+  id           String   @id @default(cuid())
+  barbershopId String
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id])
+  cpf          String
+  phone        String
+  codeHash     String
+  channel      String   // WHATSAPP | EMAIL
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  verifiedAt   DateTime?
+  createdAt    DateTime @default(now())
+  @@index([barbershopId, cpf, phone])
 }
 
 model Appointment {
