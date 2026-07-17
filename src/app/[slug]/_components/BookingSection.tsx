@@ -128,10 +128,12 @@ export function BookingSection({ shop }: Props) {
   const [formError, setFormError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // Phone verification
-  const [phoneVerified, setPhoneVerified] = useState<boolean | null>(null)
-  const [checkingVerification, setCheckingVerification] = useState(false)
-  const [verificationSent, setVerificationSent] = useState<{ channel: 'WHATSAPP' | 'EMAIL' } | null>(null)
+  // Phone verification — results are keyed by "cpf|phone" and re-derived on
+  // render (not stored as separate "loading"/"verified" flags) so the
+  // auto-check effect below never needs to setState synchronously in its
+  // body, only from its async .then() callback.
+  const [verifiedResult, setVerifiedResult] = useState<{ key: string; verified: boolean } | null>(null)
+  const [sentResult, setSentResult] = useState<{ key: string; channel: 'WHATSAPP' | 'EMAIL' } | null>(null)
   const [verificationCode, setVerificationCode] = useState('')
   const [verificationError, setVerificationError] = useState<string | null>(null)
   const [sendingCode, startSendCodeTransition] = useTransition()
@@ -159,31 +161,38 @@ export function BookingSection({ shop }: Props) {
 
   // ── Phone verification: auto-check once CPF + phone are both filled ────
 
+  const normalizedCpfForVerification = normalizeCpf(customerCpf)
+  const cpfPhoneReadyForVerification =
+    !!normalizedCpfForVerification && isValidCpf(normalizedCpfForVerification) && !!customerPhone.trim()
+  // Identity of the current CPF+phone pair — verifiedResult/sentResult are
+  // only "current" when their key matches. Editing either field derives a
+  // new key, so stale results from a different pair are never shown without
+  // any effect needing to reset them.
+  const verificationKey = cpfPhoneReadyForVerification
+    ? `${normalizedCpfForVerification}|${customerPhone.trim()}`
+    : null
+  const phoneVerified =
+    verificationKey && verifiedResult?.key === verificationKey ? verifiedResult.verified : null
+  const checkingVerification = cpfPhoneReadyForVerification && phoneVerified === null
+  const verificationSent =
+    verificationKey && sentResult?.key === verificationKey ? sentResult : null
+
   useEffect(() => {
-    const normalized = normalizeCpf(customerCpf)
-    if (!normalized || !isValidCpf(normalized) || !customerPhone.trim()) {
-      setPhoneVerified(null)
-      setVerificationSent(null)
-      setCheckingVerification(false)
-      return
-    }
-
+    if (!verificationKey) return
     let cancelled = false
-    setCheckingVerification(true)
-    setVerificationSent(null)
-    setVerificationError(null)
 
-    checkPhoneVerified({ slug: shop.slug, cpf: normalized, phone: customerPhone.trim() }).then(res => {
-      if (!cancelled) {
-        setPhoneVerified(res.verified)
-        setCheckingVerification(false)
-      }
+    checkPhoneVerified({
+      slug: shop.slug,
+      cpf: normalizedCpfForVerification!,
+      phone: customerPhone.trim(),
+    }).then(res => {
+      if (!cancelled) setVerifiedResult({ key: verificationKey, verified: res.verified })
     })
 
     return () => {
       cancelled = true
     }
-  }, [customerCpf, customerPhone, shop.slug])
+  }, [verificationKey, normalizedCpfForVerification, customerPhone, shop.slug])
 
   function handleSendCode() {
     const normalized = normalizeCpf(customerCpf)
@@ -200,7 +209,7 @@ export function BookingSection({ shop }: Props) {
         setVerificationError(res.error)
         return
       }
-      setVerificationSent({ channel: res.channel })
+      setSentResult({ key: `${normalized}|${customerPhone.trim()}`, channel: res.channel })
       setCanResend(false)
       setTimeout(() => setCanResend(true), 60_000)
     })
@@ -221,8 +230,9 @@ export function BookingSection({ shop }: Props) {
         setVerificationError(res.error)
         return
       }
-      setPhoneVerified(true)
-      setVerificationSent(null)
+      const key = `${normalized}|${customerPhone.trim()}`
+      setVerifiedResult({ key, verified: true })
+      setSentResult(null)
     })
   }
 
@@ -760,7 +770,7 @@ export function BookingSection({ shop }: Props) {
               />
             </div>
 
-            {customerCpf.trim() && customerPhone.trim() && (
+            {cpfPhoneReadyForVerification && (
               <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
                 {checkingVerification && (
                   <p className="text-xs text-muted-foreground">Verificando telefone…</p>
