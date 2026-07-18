@@ -61,7 +61,7 @@ export function computeMinStart(date: string, timezone: string): string | undefi
  * BR heuristic: 10–11 raw digits → prefix '55'.
  * Returns null when fewer than 10 digits remain after stripping non-digits.
  */
-function normalizePhone(phone: string): string | null {
+export function normalizePhone(phone: string): string | null {
   const digits = phone.replace(/\D/g, '')
   if (digits.length < 10) return null
   if (digits.length === 10 || digits.length === 11) return '55' + digits

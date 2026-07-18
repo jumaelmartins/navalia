@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { isShopAccessible } from './public-actions'
 import { normalizeCpf } from '@/modules/tenancy/cpf'
+import { normalizePhone } from './create-appointment'
 import {
   isPhoneVerified,
   requestVerificationCode,
@@ -41,7 +42,10 @@ export async function checkPhoneVerified(args: {
   const cpf = normalizeCpf(args.cpf)
   if (!cpf) return { verified: false }
 
-  const verified = await isPhoneVerified(barbershopId, cpf, args.phone.trim())
+  const phone = normalizePhone(args.phone)
+  if (!phone) return { verified: false }
+
+  const verified = await isPhoneVerified(barbershopId, cpf, phone)
   return { verified }
 }
 
@@ -60,10 +64,13 @@ export async function requestPhoneVerification(args: {
   const cpf = normalizeCpf(args.cpf)
   if (!cpf) return { ok: false, error: 'CPF inválido.' }
 
+  const phone = normalizePhone(args.phone)
+  if (!phone) return { ok: false, error: 'Telefone inválido.' }
+
   const result = await requestVerificationCode({
     barbershopId,
     cpf,
-    phone: args.phone.trim(),
+    phone,
     email: args.email?.trim() || undefined,
   })
 
@@ -90,10 +97,13 @@ export async function confirmPhoneVerification(args: {
   const cpf = normalizeCpf(args.cpf)
   if (!cpf) return { ok: false, error: 'CPF inválido.' }
 
+  const phone = normalizePhone(args.phone)
+  if (!phone) return { ok: false, error: 'Telefone inválido.' }
+
   const result = await verifyCode({
     barbershopId,
     cpf,
-    phone: args.phone.trim(),
+    phone,
     code: args.code.trim(),
   })
 

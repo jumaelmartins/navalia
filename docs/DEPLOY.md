@@ -89,6 +89,18 @@ openssl rand -hex 32
 # Paste the output as EVOLUTION_API_KEY and EVOLUTION_WEBHOOK_TOKEN
 ```
 
+### SMTP (email fallback for phone verification)
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=user@example.com
+SMTP_PASSWORD=change-me
+SMTP_FROM=Navalia <no-reply@example.com>
+```
+
+Use the operator's own existing SMTP account (Gmail, SES, Zoho, etc.) — no new paid service required. This is the fallback channel the public booking page uses to send the 6-digit phone-verification code when a shop hasn't connected WhatsApp (or WhatsApp is temporarily disconnected). Shops that haven't connected WhatsApp depend entirely on these being configured correctly in production for customers to complete phone verification on the public booking page — without them, `sendEmail` fails closed and those shops can't take public bookings from unverified phones.
+
 ### Sample `.env.prod` checklist
 
 - [ ] `DOMAIN` — bare domain, no protocol
@@ -108,6 +120,7 @@ openssl rand -hex 32
 - [ ] `EVOLUTION_API_KEY` — strong random
 - [ ] `EVOLUTION_WEBHOOK_TOKEN` — same value as `EVOLUTION_API_KEY` (used to verify inbound webhook signature)
 - [ ] `EVOLUTION_WEBHOOK_URL` — `http://app:3000` (internal Docker network)
+- [ ] `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` — email fallback for phone-verification codes; required for shops without WhatsApp connected
 
 ---
 

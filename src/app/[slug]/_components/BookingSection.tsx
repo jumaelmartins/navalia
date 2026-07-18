@@ -3,7 +3,7 @@
 import { useState, useTransition, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronLeft, MessageCircle, Calendar, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, MessageCircle, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
