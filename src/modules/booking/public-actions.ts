@@ -9,11 +9,11 @@ import { BOOKING_ERROR_PT_BR } from './types'
 // Access rule helper — delegates to billing gate (single source of truth)
 // ---------------------------------------------------------------------------
 
-function isShopAccessible(shop: {
+export async function isShopAccessible(shop: {
   onboardingCompleted: boolean
   subscriptionStatus: Parameters<typeof hasAccess>[0]['subscriptionStatus']
   trialEndsAt: Date
-}): boolean {
+}): Promise<boolean> {
   if (!shop.onboardingCompleted) return false
   return hasAccess(shop)
 }
@@ -82,7 +82,7 @@ export async function getPublicShop(slug: string): Promise<PublicShop | null> {
   })
 
   if (!shop) return null
-  if (!isShopAccessible(shop)) return null
+  if (!(await isShopAccessible(shop))) return null
 
   return {
     id: shop.id,
@@ -131,7 +131,7 @@ export async function getPublicSlots(args: {
       },
     })
 
-    if (!shop || !isShopAccessible(shop)) {
+    if (!shop || !(await isShopAccessible(shop))) {
       return { ok: false, error: 'Página indisponível.' }
     }
 
@@ -189,7 +189,7 @@ export async function createPublicAppointment(args: {
       },
     })
 
-    if (!shop || !isShopAccessible(shop)) {
+    if (!shop || !(await isShopAccessible(shop))) {
       return { ok: false, error: 'Página indisponível.' }
     }
 

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useTransition, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ChevronLeft, MessageCircle, Calendar, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, MessageCircle, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,11 @@ import {
   createPublicAppointment,
   type PublicShop,
 } from '@/modules/booking/public-actions'
+import {
+  checkPhoneVerified,
+  requestPhoneVerification,
+  confirmPhoneVerification,
+} from '@/modules/booking/verification-actions'
 import { buildWhatsAppLink } from '@/modules/whatsapp/deep-link'
 import { formatCentsToBRL } from '@/modules/tenancy/money'
 import { normalizeCpf, isValidCpf } from '@/modules/tenancy/cpf'
@@ -123,6 +128,18 @@ export function BookingSection({ shop }: Props) {
   const [formError, setFormError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  // Phone verification — results are keyed by "cpf|phone" and re-derived on
+  // render (not stored as separate "loading"/"verified" flags) so the
+  // auto-check effect below never needs to setState synchronously in its
+  // body, only from its async .then() callback.
+  const [verifiedResult, setVerifiedResult] = useState<{ key: string; verified: boolean } | null>(null)
+  const [sentResult, setSentResult] = useState<{ key: string; channel: 'WHATSAPP' | 'EMAIL' } | null>(null)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationError, setVerificationError] = useState<string | null>(null)
+  const [sendingCode, startSendCodeTransition] = useTransition()
+  const [confirmingCode, startConfirmCodeTransition] = useTransition()
+  const [canResend, setCanResend] = useState(true)
+
   const selectedService = shop.services.find(s => s.id === serviceId) ?? null
   const selectedProfessional =
     professionalId !== 'any' && professionalId !== null
@@ -141,6 +158,83 @@ export function BookingSection({ shop }: Props) {
         time: selectedSlot ?? undefined,
       })
     : null
+
+  // ── Phone verification: auto-check once CPF + phone are both filled ────
+
+  const normalizedCpfForVerification = normalizeCpf(customerCpf)
+  const cpfPhoneReadyForVerification =
+    !!normalizedCpfForVerification && isValidCpf(normalizedCpfForVerification) && !!customerPhone.trim()
+  // Identity of the current CPF+phone pair — verifiedResult/sentResult are
+  // only "current" when their key matches. Editing either field derives a
+  // new key, so stale results from a different pair are never shown without
+  // any effect needing to reset them.
+  const verificationKey = cpfPhoneReadyForVerification
+    ? `${normalizedCpfForVerification}|${customerPhone.trim()}`
+    : null
+  const phoneVerified =
+    verificationKey && verifiedResult?.key === verificationKey ? verifiedResult.verified : null
+  const checkingVerification = cpfPhoneReadyForVerification && phoneVerified === null
+  const verificationSent =
+    verificationKey && sentResult?.key === verificationKey ? sentResult : null
+
+  useEffect(() => {
+    if (!verificationKey) return
+    let cancelled = false
+
+    checkPhoneVerified({
+      slug: shop.slug,
+      cpf: normalizedCpfForVerification!,
+      phone: customerPhone.trim(),
+    }).then(res => {
+      if (!cancelled) setVerifiedResult({ key: verificationKey, verified: res.verified })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [verificationKey, normalizedCpfForVerification, customerPhone, shop.slug])
+
+  function handleSendCode() {
+    const normalized = normalizeCpf(customerCpf)
+    if (!normalized) return
+    setVerificationError(null)
+    startSendCodeTransition(async () => {
+      const res = await requestPhoneVerification({
+        slug: shop.slug,
+        cpf: normalized,
+        phone: customerPhone.trim(),
+        email: customerEmail.trim() || undefined,
+      })
+      if (!res.ok) {
+        setVerificationError(res.error)
+        return
+      }
+      setSentResult({ key: `${normalized}|${customerPhone.trim()}`, channel: res.channel })
+      setCanResend(false)
+      setTimeout(() => setCanResend(true), 60_000)
+    })
+  }
+
+  function handleConfirmCode() {
+    const normalized = normalizeCpf(customerCpf)
+    if (!normalized) return
+    setVerificationError(null)
+    startConfirmCodeTransition(async () => {
+      const res = await confirmPhoneVerification({
+        slug: shop.slug,
+        cpf: normalized,
+        phone: customerPhone.trim(),
+        code: verificationCode.trim(),
+      })
+      if (!res.ok) {
+        setVerificationError(res.error)
+        return
+      }
+      const key = `${normalized}|${customerPhone.trim()}`
+      setVerifiedResult({ key, verified: true })
+      setSentResult(null)
+    })
+  }
 
   // ── Fetch slots ──────────────────────────────────────────────────────────
 
@@ -257,6 +351,10 @@ export function BookingSection({ shop }: Props) {
     const normalizedCpf = normalizeCpf(customerCpf)
     if (!normalizedCpf || !isValidCpf(normalizedCpf)) {
       setFormError('CPF inválido. Verifique os números digitados.')
+      return
+    }
+    if (phoneVerified !== true) {
+      setFormError('Verifique seu telefone antes de confirmar o agendamento.')
       return
     }
     if (!consentAccepted) {
@@ -672,6 +770,76 @@ export function BookingSection({ shop }: Props) {
               />
             </div>
 
+            {cpfPhoneReadyForVerification && (
+              <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                {checkingVerification && (
+                  <p className="text-xs text-muted-foreground">Verificando telefone…</p>
+                )}
+
+                {!checkingVerification && phoneVerified === true && (
+                  <p className="text-xs font-medium text-[var(--status-confirmed-fg)]">
+                    ✓ Telefone verificado
+                  </p>
+                )}
+
+                {!checkingVerification && phoneVerified === false && !verificationSent && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Por segurança, confirme que este telefone é seu.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSendCode}
+                      disabled={sendingCode}
+                    >
+                      {sendingCode ? 'Enviando…' : 'Enviar código de verificação'}
+                    </Button>
+                  </div>
+                )}
+
+                {!checkingVerification && phoneVerified === false && verificationSent && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Enviamos um código para o seu{' '}
+                      {verificationSent.channel === 'WHATSAPP' ? 'WhatsApp' : 'e-mail'}.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={verificationCode}
+                        onChange={e => setVerificationCode(e.target.value)}
+                        placeholder="000000"
+                        maxLength={6}
+                        disabled={confirmingCode}
+                        className="w-28"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleConfirmCode}
+                        disabled={confirmingCode || verificationCode.trim().length !== 6}
+                      >
+                        {confirmingCode ? 'Confirmando…' : 'Confirmar código'}
+                      </Button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={!canResend || sendingCode}
+                      className="text-xs text-muted-foreground underline disabled:opacity-50 disabled:no-underline"
+                    >
+                      Reenviar código
+                    </button>
+                  </div>
+                )}
+
+                {verificationError && (
+                  <p className="text-xs text-destructive">{verificationError}</p>
+                )}
+              </div>
+            )}
+
             <div className="flex items-start gap-2">
               <input
                 id="booking-consent"
@@ -705,7 +873,7 @@ export function BookingSection({ shop }: Props) {
             <Button
               type="submit"
               className="w-full h-11 text-sm font-medium hover:bg-primary-hover"
-              disabled={isPending}
+              disabled={isPending || phoneVerified === false}
             >
               {isPending ? 'Confirmando…' : 'Confirmar agendamento'}
             </Button>

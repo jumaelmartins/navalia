@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import { createAppointment, cancelAppointment } from './create-appointment'
+import { isPhoneVerified } from './verification'
 
 // Fixed future Monday (weekday 1) — stable test anchor
 const TEST_DATE = '2026-07-06'
@@ -68,6 +69,7 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
     await prisma.auditLog.deleteMany({ where: { barbershopId } })
     await prisma.notification.deleteMany({ where: { barbershopId } })
     await prisma.appointment.deleteMany({ where: { barbershopId } })
+    await prisma.phoneVerification.deleteMany({ where: { barbershopId } })
     await prisma.customer.deleteMany({ where: { barbershopId } })
     await prisma.scheduleBlock.deleteMany({ where: { barbershopId } })
     await prisma.availabilityRule.deleteMany({ where: { barbershopId } })
@@ -304,8 +306,24 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
   })
 
   it('(m) PUBLIC_PAGE booking with consent sets privacyConsentAt; a repeat booking does not overwrite it', async () => {
-    const uniquePhone = '11955550001'
+    // Already E.164-shaped (13 digits) so normalizePhone() is an identity op —
+    // must match exactly what create-appointment.ts stores/looks up by.
+    const uniquePhone = '5511955550001'
     const consentCpf = '39053344705'
+
+    // Pre-verify this phone so the test isolates consent behaviour from the
+    // phone-verification gate (covered separately by tests q/r/s below).
+    await prisma.phoneVerification.create({
+      data: {
+        barbershopId,
+        cpf: consentCpf,
+        phone: uniquePhone,
+        codeHash: 'irrelevant-for-this-test',
+        channel: 'EMAIL',
+        expiresAt: new Date(Date.now() + 60_000),
+        verifiedAt: new Date(),
+      },
+    })
 
     const first = await createAppointment({
       ...base('16:00'),
@@ -381,5 +399,92 @@ describe.skipIf(!process.env.DATABASE_URL)('booking conflict (integration)', () 
     } finally {
       await prisma.customer.delete({ where: { id: legacy.id } })
     }
+  })
+
+  it('(q) PUBLIC_PAGE booking with an unverified new phone → PHONE_NOT_VERIFIED', async () => {
+    const result = await createAppointment({
+      ...base('18:30'),
+      source: 'PUBLIC_PAGE',
+      consent: true,
+      customer: { name: 'Unverified', cpf: '20000000027', phone: '11955550003' },
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('PHONE_NOT_VERIFIED')
+  })
+
+  it('(r) PUBLIC_PAGE booking with a recently-verified phone succeeds and sets phoneVerifiedAt', async () => {
+    const cpf = '20000791997'
+    // Already E.164-shaped (13 digits) so normalizePhone() is an identity op —
+    // must match exactly what create-appointment.ts stores/looks up by.
+    const phone = '5511955550004'
+    await prisma.phoneVerification.create({
+      data: {
+        barbershopId,
+        cpf,
+        phone,
+        codeHash: 'irrelevant-for-this-test',
+        channel: 'EMAIL',
+        expiresAt: new Date(Date.now() + 60_000),
+        verifiedAt: new Date(),
+      },
+    })
+
+    const result = await createAppointment({
+      ...base('13:00'),
+      source: 'PUBLIC_PAGE',
+      consent: true,
+      customer: { name: 'Recently Verified', cpf, phone },
+    })
+    expect(result.ok).toBe(true)
+
+    const customer = await prisma.customer.findUnique({
+      where: { barbershopId_cpf: { barbershopId, cpf } },
+    })
+    expect(customer?.phoneVerifiedAt).not.toBeNull()
+  })
+
+  it('(s) a returning customer whose phone is already trusted skips the gate on a second booking', async () => {
+    const cpf = '20001583824'
+    // Already E.164-shaped (13 digits) so normalizePhone() is an identity op —
+    // must match exactly what create-appointment.ts stores/looks up by.
+    const phone = '5511955550005'
+    await prisma.phoneVerification.create({
+      data: {
+        barbershopId,
+        cpf,
+        phone,
+        codeHash: 'irrelevant-for-this-test',
+        channel: 'EMAIL',
+        expiresAt: new Date(Date.now() + 60_000),
+        verifiedAt: new Date(),
+      },
+    })
+    const first = await createAppointment({
+      ...base('13:30'),
+      source: 'PUBLIC_PAGE',
+      consent: true,
+      customer: { name: 'Returning Customer', cpf, phone },
+    })
+    expect(first.ok).toBe(true)
+    expect(await isPhoneVerified(barbershopId, cpf, phone)).toBe(true)
+
+    // No new PhoneVerification row exists for this booking — proves the gate
+    // is satisfied via Customer.phoneVerifiedAt, not a fresh code.
+    const second = await createAppointment({
+      ...base('14:00'),
+      source: 'PUBLIC_PAGE',
+      consent: true,
+      customer: { name: 'Returning Customer', cpf, phone },
+    })
+    expect(second.ok).toBe(true)
+  })
+
+  it('(t) ADMIN source is unaffected by the phone-verification gate', async () => {
+    const result = await createAppointment({
+      ...base('14:30'),
+      source: 'ADMIN',
+      customer: { name: 'Admin Walk-in', cpf: '20002375761', phone: '11955550006' },
+    })
+    expect(result.ok).toBe(true)
   })
 })

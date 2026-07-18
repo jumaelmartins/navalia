@@ -25,6 +25,7 @@ export type BookingError =
   | 'INVALID_PHONE'
   | 'INVALID_CPF'
   | 'CPF_MIGRATION_REQUIRED'
+  | 'PHONE_NOT_VERIFIED'
   | 'NOT_FOUND'
   | 'CONSENT_REQUIRED'
 
@@ -37,6 +38,7 @@ export const BOOKING_ERROR_PT_BR: Record<BookingError, string> = {
   INVALID_PHONE: 'Telefone inválido.',
   INVALID_CPF: 'CPF inválido.',
   CPF_MIGRATION_REQUIRED: 'Agendamentos temporariamente indisponíveis. Entre em contato com a barbearia.',
+  PHONE_NOT_VERIFIED: 'Verifique seu telefone antes de confirmar o agendamento.',
   NOT_FOUND: 'Agendamento não encontrado.',
   CONSENT_REQUIRED: 'Você precisa concordar com a Política de Privacidade para continuar.',
 }
