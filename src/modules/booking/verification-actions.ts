@@ -14,7 +14,8 @@ import {
 const REQUEST_ERROR_PT_BR: Record<VerificationError, string> = {
   ALREADY_VERIFIED: 'Telefone já verificado.',
   RESEND_TOO_SOON: 'Aguarde um minuto antes de pedir um novo código.',
-  EMAIL_REQUIRED: 'WhatsApp indisponível no momento — informe seu e-mail para receber o código.',
+  EMAIL_REQUIRED: 'Informe seu e-mail para receber o código.',
+  WHATSAPP_UNAVAILABLE: 'WhatsApp indisponível no momento. Tente pelo e-mail.',
   SEND_FAILED: 'Não foi possível enviar o código agora. Tente novamente.',
   NOT_FOUND: 'Página indisponível.',
   CODE_EXPIRED: 'Código expirado. Solicite um novo.',
@@ -54,6 +55,7 @@ export async function requestPhoneVerification(args: {
   cpf: string
   phone: string
   email?: string
+  preferredChannel?: 'WHATSAPP' | 'EMAIL'
 }): Promise<
   | { ok: true; channel: 'WHATSAPP' | 'EMAIL' }
   | { ok: false; error: string; needsEmail?: boolean }
@@ -72,6 +74,7 @@ export async function requestPhoneVerification(args: {
     cpf,
     phone,
     email: args.email?.trim() || undefined,
+    preferredChannel: args.preferredChannel,
   })
 
   if (!result.ok) {

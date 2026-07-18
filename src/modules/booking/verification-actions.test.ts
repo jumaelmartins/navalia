@@ -178,4 +178,19 @@ describe.skipIf(!process.env.DATABASE_URL)('verification-actions (integration)',
 
     expect(bookingResult.ok).toBe(true)
   })
+
+  it('(g) preferredChannel WHATSAPP on a shop with no WhatsApp connected surfaces a friendly WHATSAPP_UNAVAILABLE message', async () => {
+    const result = await requestPhoneVerification({
+      slug,
+      cpf: '18723501006',
+      phone: '5571999991004',
+      email: 'cliente@example.com',
+      preferredChannel: 'WHATSAPP',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('WhatsApp indisponível no momento. Tente pelo e-mail.')
+      expect(result.needsEmail).toBe(false)
+    }
+  })
 })
