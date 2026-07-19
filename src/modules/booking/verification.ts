@@ -14,6 +14,7 @@ export type VerificationError =
   | 'ALREADY_VERIFIED'
   | 'RESEND_TOO_SOON'
   | 'EMAIL_REQUIRED'
+  | 'WHATSAPP_UNAVAILABLE'
   | 'SEND_FAILED'
   | 'NOT_FOUND'
   | 'CODE_EXPIRED'
@@ -71,8 +72,9 @@ export async function hasRecentVerification(
 }
 
 /**
- * Sends a 6-digit code via WhatsApp (if the shop's Evolution instance is
- * connected) or email (fallback — requires `args.email`).
+ * Sends a 6-digit code via WhatsApp or email. `args.preferredChannel` lets
+ * the customer pick when both are viable; omitted, it falls back to
+ * WhatsApp-if-connected-else-require-email (the original auto behavior).
  *
  * The DB, not the network call, is the sole arbiter of "who gets to send":
  * phase 1 (`reserveVerificationSlot`) commits a Serializable transaction that
@@ -89,7 +91,13 @@ export async function hasRecentVerification(
  * customer isn't stuck behind a cooldown for a code that never arrived.
  */
 export async function requestVerificationCode(
-  args: { barbershopId: string; cpf: string; phone: string; email?: string },
+  args: {
+    barbershopId: string
+    cpf: string
+    phone: string
+    email?: string
+    preferredChannel?: 'WHATSAPP' | 'EMAIL'
+  },
   deps: Deps = {},
 ): Promise<Result<{ channel: 'WHATSAPP' | 'EMAIL' }>> {
   const db = deps.prisma ?? realPrisma
@@ -108,12 +116,20 @@ export async function requestVerificationCode(
   })
   if (!shop) return { ok: false, error: 'NOT_FOUND' }
 
-  const useWhatsApp = !!shop.evolutionInstanceId && shop.whatsappStatus === 'CONNECTED'
-  if (!useWhatsApp && !args.email) {
-    return { ok: false, error: 'EMAIL_REQUIRED' }
-  }
+  const whatsappAvailable = !!shop.evolutionInstanceId && shop.whatsappStatus === 'CONNECTED'
 
-  const channel: 'WHATSAPP' | 'EMAIL' = useWhatsApp ? 'WHATSAPP' : 'EMAIL'
+  let channel: 'WHATSAPP' | 'EMAIL'
+  if (args.preferredChannel === 'WHATSAPP') {
+    if (!whatsappAvailable) return { ok: false, error: 'WHATSAPP_UNAVAILABLE' }
+    channel = 'WHATSAPP'
+  } else if (args.preferredChannel === 'EMAIL') {
+    if (!args.email) return { ok: false, error: 'EMAIL_REQUIRED' }
+    channel = 'EMAIL'
+  } else {
+    if (!whatsappAvailable && !args.email) return { ok: false, error: 'EMAIL_REQUIRED' }
+    channel = whatsappAvailable ? 'WHATSAPP' : 'EMAIL'
+  }
+  const useWhatsApp = channel === 'WHATSAPP'
   const code = generateCode()
   const codeHash = hashCode(code)
 

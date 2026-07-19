@@ -248,4 +248,62 @@ describe.skipIf(!process.env.DATABASE_URL)('verification (integration)', () => {
     if (!failed[0].ok) expect(failed[0].error).toBe('RESEND_TOO_SOON')
     expect(sendEmail).toHaveBeenCalledTimes(1)
   })
+
+  it('(o) preferredChannel EMAIL on a connected (WhatsApp-available) shop still sends via email', async () => {
+    const sendWhatsApp = vi.fn().mockResolvedValue({ ok: true })
+    const sendEmail = vi.fn().mockResolvedValue({ ok: true })
+    const result = await requestVerificationCode(
+      {
+        barbershopId: connectedShopId,
+        cpf: 'prefer-email-cpf',
+        phone: '5571999990201',
+        email: 'cliente@example.com',
+        preferredChannel: 'EMAIL',
+      },
+      { sendWhatsApp, sendEmail },
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.channel).toBe('EMAIL')
+    expect(sendEmail).toHaveBeenCalledTimes(1)
+    expect(sendWhatsApp).not.toHaveBeenCalled()
+  })
+
+  it('(p) preferredChannel EMAIL without an email → EMAIL_REQUIRED, even on a connected shop', async () => {
+    const result = await requestVerificationCode({
+      barbershopId: connectedShopId,
+      cpf: 'prefer-email-no-address-cpf',
+      phone: '5571999990202',
+      preferredChannel: 'EMAIL',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('EMAIL_REQUIRED')
+  })
+
+  it('(q) preferredChannel WHATSAPP on a disconnected shop → WHATSAPP_UNAVAILABLE', async () => {
+    const result = await requestVerificationCode({
+      barbershopId,
+      cpf: 'prefer-whatsapp-unavailable-cpf',
+      phone: '5571999990203',
+      email: 'cliente@example.com',
+      preferredChannel: 'WHATSAPP',
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('WHATSAPP_UNAVAILABLE')
+  })
+
+  it('(r) preferredChannel WHATSAPP on a connected shop sends via WhatsApp', async () => {
+    const sendWhatsApp = vi.fn().mockResolvedValue({ ok: true })
+    const result = await requestVerificationCode(
+      {
+        barbershopId: connectedShopId,
+        cpf: 'prefer-whatsapp-cpf',
+        phone: '5571999990204',
+        preferredChannel: 'WHATSAPP',
+      },
+      { sendWhatsApp },
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.data.channel).toBe('WHATSAPP')
+    expect(sendWhatsApp).toHaveBeenCalledTimes(1)
+  })
 })

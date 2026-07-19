@@ -194,9 +194,13 @@ export function BookingSection({ shop }: Props) {
     }
   }, [verificationKey, normalizedCpfForVerification, customerPhone, shop.slug])
 
-  function handleSendCode() {
+  function handleSendCode(channel: 'WHATSAPP' | 'EMAIL') {
     const normalized = normalizeCpf(customerCpf)
     if (!normalized) return
+    if (channel === 'EMAIL' && !customerEmail.trim()) {
+      setVerificationError('Informe seu e-mail para receber o código.')
+      return
+    }
     setVerificationError(null)
     startSendCodeTransition(async () => {
       const res = await requestPhoneVerification({
@@ -204,6 +208,7 @@ export function BookingSection({ shop }: Props) {
         cpf: normalized,
         phone: customerPhone.trim(),
         email: customerEmail.trim() || undefined,
+        preferredChannel: channel,
       })
       if (!res.ok) {
         setVerificationError(res.error)
@@ -787,15 +792,28 @@ export function BookingSection({ shop }: Props) {
                     <p className="text-xs text-muted-foreground">
                       Por segurança, confirme que este telefone é seu.
                     </p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSendCode}
-                      disabled={sendingCode}
-                    >
-                      {sendingCode ? 'Enviando…' : 'Enviar código de verificação'}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      {shop.whatsappAvailable && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSendCode('WHATSAPP')}
+                          disabled={sendingCode}
+                        >
+                          {sendingCode ? 'Enviando…' : 'Enviar por WhatsApp'}
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSendCode('EMAIL')}
+                        disabled={sendingCode}
+                      >
+                        {sendingCode ? 'Enviando…' : 'Enviar por e-mail'}
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -825,7 +843,7 @@ export function BookingSection({ shop }: Props) {
                     </div>
                     <button
                       type="button"
-                      onClick={handleSendCode}
+                      onClick={() => handleSendCode(verificationSent.channel)}
                       disabled={!canResend || sendingCode}
                       className="text-xs text-muted-foreground underline disabled:opacity-50 disabled:no-underline"
                     >

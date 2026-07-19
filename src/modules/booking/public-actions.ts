@@ -52,6 +52,8 @@ export type PublicShop = {
   cancellationPolicy: string | null
   services: PublicService[]
   professionals: PublicProfessional[]
+  /** True when the shop's WhatsApp is connected — lets the booking page offer it as a verification-code channel. */
+  whatsappAvailable: boolean
 }
 
 export async function getPublicShop(slug: string): Promise<PublicShop | null> {
@@ -103,6 +105,7 @@ export async function getPublicShop(slug: string): Promise<PublicShop | null> {
       avatarUrl: p.avatarUrl,
       serviceIds: p.services.map(s => s.serviceId),
     })),
+    whatsappAvailable: !!shop.evolutionInstanceId && shop.whatsappStatus === 'CONNECTED',
   }
 }
 
